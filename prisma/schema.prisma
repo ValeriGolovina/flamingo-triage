@@ -46,6 +46,7 @@ model User {
 
   memberships   Membership[]
   claimedItems  Item[]       @relation("ItemClaimedBy")
+  lastClaimedItems Item[]    @relation("ItemLastClaimedBy")
   resolvedItems Item[]       @relation("ItemResolvedBy")
 
   @@map("users")
@@ -86,6 +87,11 @@ model Item {
   // The cost — no claim history — is documented in DECISIONS.md.
   claimedById  String?   @map("claimed_by_id") @db.Uuid
   claimedAt    DateTime? @map("claimed_at") @db.Timestamptz(3)
+
+  /// Survives the R5 sweep so an expired claim can still be resolved by the
+  /// person who did the work — and only by them. Cleared on release, because
+  /// releasing is saying "not mine", and on a successful claim by someone else.
+  lastClaimedById String? @map("last_claimed_by_id") @db.Uuid
   resolvedById String?   @map("resolved_by_id") @db.Uuid
   resolvedAt   DateTime? @map("resolved_at") @db.Timestamptz(3)
 
@@ -94,7 +100,8 @@ model Item {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
   workspace  Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  claimedBy  User?     @relation("ItemClaimedBy", fields: [claimedById], references: [id])
+  claimedBy     User? @relation("ItemClaimedBy", fields: [claimedById], references: [id])
+  lastClaimedBy User? @relation("ItemLastClaimedBy", fields: [lastClaimedById], references: [id])
   resolvedBy User?     @relation("ItemResolvedBy", fields: [resolvedById], references: [id])
 
   notificationJobs NotificationJob[]
@@ -124,5 +131,8 @@ model NotificationJob {
 
   item Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
 
+  // The health summary is polled by every client; without this it is a
+  // sequential scan over a table that grows by one row per resolve, forever.
+  @@index([workspaceId, status], map: "notification_jobs_ws_status_idx")
   @@map("notification_jobs")
 }

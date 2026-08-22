@@ -160,9 +160,12 @@ async function main() {
       const status = s < 0.6 ? 'open' : s < 0.85 ? 'claimed' : 'resolved'
 
       if (status === 'open') {
-        return [workspaceIds[w], title, status, null, null, null, null, createdAt]
+        return [workspaceIds[w], title, status, null, null, null, null, null, createdAt]
       }
 
+      // `last_claimed_by_id` mirrors the holder, matching what a real claim
+      // writes — otherwise seeded items would lose the right to a late resolve
+      // the moment the R5 sweep released them.
       const actor = pick(actorsByWorkspace[w])
 
       // Most live claims are fresh; a minority are already past the 30-minute
@@ -171,13 +174,13 @@ async function main() {
       const claimedAt = new Date(Math.max(createdAt.getTime() + MINUTE, now - age))
 
       if (status === 'claimed') {
-        return [workspaceIds[w], title, status, actor, claimedAt, null, null, createdAt]
+        return [workspaceIds[w], title, status, actor, claimedAt, actor, null, null, createdAt]
       }
 
       const resolvedAt = new Date(
         Math.min(now, claimedAt.getTime() + MINUTE + randomInt(4 * HOUR)),
       )
-      return [workspaceIds[w], title, status, actor, claimedAt, actor, resolvedAt, createdAt]
+      return [workspaceIds[w], title, status, actor, claimedAt, actor, actor, resolvedAt, createdAt]
     })
 
     const BATCH = 2_000
@@ -185,12 +188,13 @@ async function main() {
       const batch = rows.slice(i, i + BATCH)
       await client.query(
         `insert into items
-           (workspace_id, title, status, claimed_by_id, claimed_at, resolved_by_id, resolved_at, created_at)
+           (workspace_id, title, status, claimed_by_id, claimed_at, last_claimed_by_id,
+            resolved_by_id, resolved_at, created_at)
          select * from unnest(
-           $1::uuid[], $2::text[], $3::item_status[], $4::uuid[],
-           $5::timestamptz[], $6::uuid[], $7::timestamptz[], $8::timestamptz[]
+           $1::uuid[], $2::text[], $3::item_status[], $4::uuid[], $5::timestamptz[],
+           $6::uuid[], $7::uuid[], $8::timestamptz[], $9::timestamptz[]
          )`,
-        [0, 1, 2, 3, 4, 5, 6, 7].map((col) => batch.map((row) => row[col])),
+        [0, 1, 2, 3, 4, 5, 6, 7, 8].map((col) => batch.map((row) => row[col])),
       )
       process.stdout.write(`  ${Math.min(i + BATCH, rows.length)}/${rows.length}\r`)
     }

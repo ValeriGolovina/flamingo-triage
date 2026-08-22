@@ -93,6 +93,7 @@ export const itemRepository = {
     return { items: rows.slice(0, params.limit).map(toQueueItem), hasMore }
   },
 
+  /** Only worth running for the first page — see queueService. */
   async countMatching(ctx: WorkspaceContext, status?: ItemStatus): Promise<number> {
     const statusFilter = status ? Prisma.sql`and status = ${status}::item_status` : Prisma.empty
     const rows = await prisma.$queryRaw<Array<{ n: number }>>`
@@ -130,7 +131,10 @@ export const itemMutations = {
     const rows = await prisma.$queryRaw<ItemRow[]>`
       with claimed as (
         update items
-           set status = 'claimed', claimed_by_id = ${ctx.userId}::uuid, claimed_at = now()
+           set status = 'claimed',
+               claimed_by_id = ${ctx.userId}::uuid,
+               claimed_at = now(),
+               last_claimed_by_id = ${ctx.userId}::uuid
          where id = ${itemId}::uuid
            and workspace_id = ${ctx.workspaceId}::uuid
            and status = 'open'
@@ -141,12 +145,20 @@ export const itemMutations = {
     return rows[0] ? toQueueItem(rows[0]) : null
   },
 
-  /** Only the holder may release. Clearing the columns is required by the CHECK. */
+  /**
+   * Only the holder may release. Clearing the claim columns is required by the
+   * CHECK constraint; clearing `last_claimed_by_id` is a decision — releasing
+   * says "not mine", so it also gives up the right to resolve it later. That is
+   * what separates release from the sweep, which keeps it.
+   */
   async release(ctx: WorkspaceContext, itemId: string): Promise<QueueItem | null> {
     const rows = await prisma.$queryRaw<ItemRow[]>`
       with released as (
         update items
-           set status = 'open', claimed_by_id = null, claimed_at = null
+           set status = 'open',
+               claimed_by_id = null,
+               claimed_at = null,
+               last_claimed_by_id = null
          where id = ${itemId}::uuid
            and workspace_id = ${ctx.workspaceId}::uuid
            and status = 'claimed'
@@ -161,11 +173,17 @@ export const itemMutations = {
 
 /**
  * Resolve accepts an executor so the caller can put it in the same transaction
- * as the outbox write. The condition is wider than claim's on purpose: a claim
- * that expired (R5) returns the item to `open`, and refusing the resolve that
- * arrives afterwards would throw away work that was actually done. Refusing
- * only happens when somebody *else* now holds it — accepting there would erase
- * their claim.
+ * as the outbox write.
+ *
+ * Two ways in, and the second is narrow on purpose. The ordinary path is "you
+ * hold it". The other is R5: your claim expired and the sweep returned the item
+ * to the queue, but you did the work — so `last_claimed_by_id`, which the sweep
+ * deliberately preserves, still names you.
+ *
+ * Scoping it that way matters: `or status = 'open'` on its own would let any
+ * member resolve any unclaimed item without ever holding it, which is reachable
+ * by curl even though the UI never offers it, and it would quietly undo the
+ * product rule that a claim is how work is not duplicated.
  */
 export async function resolveItemRow(
   db: Executor,
@@ -180,7 +198,7 @@ export async function resolveItemRow(
          and workspace_id = ${ctx.workspaceId}::uuid
          and (
            (status = 'claimed' and claimed_by_id = ${ctx.userId}::uuid)
-           or status = 'open'
+           or (status = 'open' and last_claimed_by_id = ${ctx.userId}::uuid)
          )
       returning *
     )
@@ -206,6 +224,19 @@ export type SweptClaim = { id: string; workspace_id: string }
  * `open` row that still names a holder, which is precisely the bug this kind of
  * bulk update tends to ship with.
  */
+export async function countStaleClaims(
+  _system: SystemContext,
+  staleAfterMinutes: number,
+): Promise<number> {
+  const rows = await prisma.$queryRaw<Array<{ n: number }>>`
+    select count(*)::int as n
+      from items
+     where status = 'claimed'
+       and claimed_at < now() - (interval '1 minute' * ${staleAfterMinutes})
+  `
+  return rows[0]?.n ?? 0
+}
+
 export async function sweepStaleClaims(
   _system: SystemContext,
   staleAfterMinutes: number,

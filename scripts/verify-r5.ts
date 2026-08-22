@@ -95,11 +95,29 @@ async function main() {
       db.query(`update items set claimed_at = now() - interval '100 days' where id = $1`, [id])
 
     // --- the sweep itself ---
+    // Self-contained: a previous run may already have cleared the seeded
+    // backlog, and a test that only passes against a particular database state
+    // is a test that reports the state rather than the behaviour.
+    const doomed = await claimOne(alice)
+    await makeStale(doomed)
+
     const stale = await db.query<{ n: number }>(
       `select count(*)::int n from items where status='claimed' and claimed_at < now() - interval '30 minutes'`,
     )
-    const report = await json<{ released: number }>(await sweep(), 'sweep')
-    check(report.released > 0, `sweep released ${report.released} of ${stale.rows[0].n} stale claims`)
+    const report = await json<{ released: number; outstanding: number }>(await sweep(), 'sweep')
+    check(
+      report.released > 0,
+      `sweep released ${report.released} of ${stale.rows[0].n} stale claims (${report.outstanding} left)`,
+    )
+    const doomedNow = await db.query<{ status: string; last_claimed_by_id: string | null }>(
+      `select status::text, last_claimed_by_id from items where id = $1`,
+      [doomed],
+    )
+    check(doomedNow.rows[0].status === 'open', 'the backdated claim specifically was released')
+    check(
+      doomedNow.rows[0].last_claimed_by_id !== null,
+      'the sweep preserved who last held it, so they can still resolve their work',
+    )
 
     const contradictory = await db.query<{ n: number }>(
       `select count(*)::int n from items where status='open' and (claimed_by_id is not null or claimed_at is not null)`,
@@ -126,6 +144,27 @@ async function main() {
     check(
       late.outcome === 'applied' && late.resolvedWithoutClaim === true,
       'late resolve is accepted when the item is still free, and flagged as unclaimed',
+    )
+
+    // --- a member must not resolve an item they never held ---
+    // Before the review this branch read `or status = 'open'`, which let anyone
+    // resolve any unclaimed item by curl. It is now scoped to last_claimed_by_id.
+    const { items: untouched } = await json<{ items: Item[] }>(
+      await fetch(`${BASE_URL}/api/workspaces/${workspaceId}/items?status=open&limit=1`, {
+        headers: { cookie: bob.cookie },
+      }),
+      'open item',
+    )
+    const neverHeld = await json<ActionResult>(
+      await fetch(`${BASE_URL}/api/workspaces/${workspaceId}/items/${untouched[0].id}/resolve`, {
+        method: 'POST',
+        headers: { cookie: bob.cookie },
+      }),
+      'resolve without ever claiming',
+    )
+    check(
+      neverHeld.outcome === 'rejected',
+      'a member cannot resolve an open item they never claimed',
     )
 
     // --- the same, but somebody else claimed it in the meantime ---
