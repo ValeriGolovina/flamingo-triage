@@ -46,3 +46,6 @@ NOTES/
 
 # prisma generated client
 /src/generated/prisma
+
+# local tooling
+.claude/
