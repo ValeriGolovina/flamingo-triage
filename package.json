@@ -14,7 +14,9 @@
     "verify:r1": "tsx scripts/verify-r1.ts",
     "verify:r3": "tsx scripts/verify-r3.ts",
     "verify:r5": "tsx scripts/verify-r5.ts",
-    "verify:r4": "tsx scripts/verify-r4.ts"
+    "verify:r4": "tsx scripts/verify-r4.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.9.1",
@@ -40,6 +42,7 @@
     "eslint-config-next": "16.3.2",
     "tailwindcss": "^4",
     "tsx": "^4.23.12",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.11"
   }
 }
