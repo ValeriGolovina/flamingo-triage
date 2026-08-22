@@ -111,8 +111,17 @@ CLAIMERS=16 ROUNDS=10 npm run verify:r1
 | `npm run verify:r4` | an 8-page keyset walk under concurrent claiming — no repeats, no omissions; demonstrates `OFFSET` skipping a row; prints `EXPLAIN ANALYZE` for a deep page both ways |
 | `npm run verify:r5` | stale claims return to the queue, the sweep leaves no contradictory row, it is 401 without the secret, and a late resolve is accepted only when nobody else has taken over |
 
-They need the dev server running and a seeded database. `npm test` needs
-neither — it covers the pure logic (16 tests, ~150ms).
+They need the dev server running and a seeded database. Two checks need
+neither:
+
+```bash
+npm test              # pure logic — 16 tests, ~150ms
+npm run check:arch    # the client/server boundaries the layout depends on
+```
+
+`check:arch` fails on a feature importing another feature, the client reaching
+into the server, the server reaching into the client, `shared` depending on
+either side, or an empty layer folder.
 
 ### Cron routes by hand
 
