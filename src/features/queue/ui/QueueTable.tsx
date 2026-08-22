@@ -1,18 +1,27 @@
 'use client'
 
+import { useSession } from '@/features/auth/hooks/useSession'
+import { useCurrentWorkspace } from '@/features/workspace/hooks/useCurrentWorkspace'
+import { Role } from '@/shared/model/domain'
 import { Spinner } from '@/shared/ui/Spinner'
 import { EmptyState, ErrorState, SkeletonRows } from '@/shared/ui/states'
 
+import { useItemActions } from '../hooks/useItemActions'
 import { useQueue } from '../hooks/useQueue'
+import { QueueNotice } from './QueueNotice'
 import { QueueRow } from './QueueRow'
 import { QueueToolbar } from './QueueToolbar'
 
 export function QueueTable() {
   const queue = useQueue()
+  const { user } = useSession()
+  const { current } = useCurrentWorkspace()
+  const actions = useItemActions(current?.id ?? '')
 
   return (
     <section className="flex min-h-0 flex-1 flex-col">
       <QueueToolbar total={queue.total} loaded={queue.items.length} />
+      <QueueNotice />
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         <Body />
@@ -40,7 +49,15 @@ export function QueueTable() {
     return (
       <>
         {queue.items.map((item) => (
-          <QueueRow key={item.id} item={item} />
+          <QueueRow
+            key={item.id}
+            item={item}
+            currentUserId={user?.id ?? ''}
+            role={current?.role ?? Role.Viewer}
+            isPending={actions.pendingItemId === item.id}
+            onClaim={(id) => actions.claim.mutate(id)}
+            onRelease={(id) => actions.release.mutate(id)}
+          />
         ))}
 
         <div className="px-4 py-4 text-center">

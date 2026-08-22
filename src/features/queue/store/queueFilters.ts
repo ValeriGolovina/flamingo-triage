@@ -15,13 +15,18 @@ import type { ItemStatus } from '@/shared/model/domain'
 type QueueFiltersState = {
   workspaceId: string | null
   status: ItemStatus | null
+  /** Transient message after an action — "Dmytro claimed this a moment before you". */
+  notice: string | null
   setWorkspaceId: (id: string | null) => void
   setStatus: (status: ItemStatus | null) => void
+  setNotice: (notice: string | null) => void
 }
 
 export const useQueueFilters = create<QueueFiltersState>((set) => ({
   workspaceId: null,
   status: null,
-  setWorkspaceId: (workspaceId) => set({ workspaceId }),
-  setStatus: (status) => set({ status }),
+  notice: null,
+  setWorkspaceId: (workspaceId) => set({ workspaceId, notice: null }),
+  setStatus: (status) => set({ status, notice: null }),
+  setNotice: (notice) => set({ notice }),
 }))

@@ -1,4 +1,4 @@
-import type { ClaimOutcome, ItemStatus } from './domain'
+import type { ActionOutcome, ItemStatus, RejectionReason } from './domain'
 
 /** Wire shape of a queue row. Dates are ISO strings — JSON has no Date. */
 export type QueueItem = {
@@ -35,10 +35,14 @@ export type QueuePage = {
 }
 
 /**
- * The result of a claim attempt. `Lost` is not an error: the request was valid,
- * somebody else was simply first, and `item` carries the fresh row so the UI
- * can reconcile without waiting for the next poll.
+ * The result of claim / release / resolve.
+ *
+ * Rejection is not an error — the request was valid and authorized, the world
+ * had simply moved. `item` is always the fresh row, which is what lets the UI
+ * reconcile immediately instead of showing a stale row until the next poll.
  */
-export type ClaimResult =
-  | { outcome: ClaimOutcome.Won; item: QueueItem }
-  | { outcome: ClaimOutcome.Lost; item: QueueItem }
+export type ActionResult = {
+  outcome: ActionOutcome
+  item: QueueItem
+  reason?: RejectionReason
+}

@@ -28,12 +28,23 @@ export function roleAtLeast(actual: Role, required: Role): boolean {
 }
 
 /**
- * Losing a claim is a normal result, not an exception — it carries who won,
- * so the UI can say so instead of showing a generic conflict.
+ * Losing a race is a normal result, not an exception. The response carries the
+ * fresh row, so the UI can name who won instead of showing a generic conflict —
+ * and so the loser learns the truth from their own request rather than waiting
+ * for the next poll.
  */
-export enum ClaimOutcome {
-  Won = 'won',
-  Lost = 'lost',
+export enum ActionOutcome {
+  Applied = 'applied',
+  Rejected = 'rejected',
+}
+
+export enum RejectionReason {
+  /** Someone else got there first. `item.claimedBy` says who. */
+  AlreadyClaimed = 'already_claimed',
+  /** You are not the holder — released or swept out from under you. */
+  NotHeldByYou = 'not_held_by_you',
+  /** Already resolved; there is nothing left to do. */
+  AlreadyResolved = 'already_resolved',
 }
 
 /** Every code the API can put on the wire. Clients read the body, not the status. */

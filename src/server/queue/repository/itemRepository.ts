@@ -113,3 +113,46 @@ export const itemRepository = {
     return rows[0] ? toQueueItem(rows[0]) : null
   },
 }
+
+/**
+ * Claim and release are single conditional statements, never read-then-write.
+ * The gap between a SELECT and an UPDATE is exactly where the race in R1 lives;
+ * in one statement there is no gap, because Postgres locks the row and the
+ * second writer re-evaluates the WHERE clause against the updated value.
+ *
+ * A zero-row result is therefore the answer "somebody else was first", not a
+ * failure — the caller reads the fresh row to find out who.
+ */
+export const itemMutations = {
+  async claim(ctx: WorkspaceContext, itemId: string): Promise<QueueItem | null> {
+    const rows = await prisma.$queryRaw<ItemRow[]>`
+      with claimed as (
+        update items
+           set status = 'claimed', claimed_by_id = ${ctx.userId}::uuid, claimed_at = now()
+         where id = ${itemId}::uuid
+           and workspace_id = ${ctx.workspaceId}::uuid
+           and status = 'open'
+        returning *
+      )
+      select ${SELECT_COLUMNS} from claimed i ${JOIN_ACTORS}
+    `
+    return rows[0] ? toQueueItem(rows[0]) : null
+  },
+
+  /** Only the holder may release. Clearing the columns is required by the CHECK. */
+  async release(ctx: WorkspaceContext, itemId: string): Promise<QueueItem | null> {
+    const rows = await prisma.$queryRaw<ItemRow[]>`
+      with released as (
+        update items
+           set status = 'open', claimed_by_id = null, claimed_at = null
+         where id = ${itemId}::uuid
+           and workspace_id = ${ctx.workspaceId}::uuid
+           and status = 'claimed'
+           and claimed_by_id = ${ctx.userId}::uuid
+        returning *
+      )
+      select ${SELECT_COLUMNS} from released i ${JOIN_ACTORS}
+    `
+    return rows[0] ? toQueueItem(rows[0]) : null
+  },
+}
