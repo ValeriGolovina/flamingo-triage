@@ -1,6 +1,6 @@
 import 'server-only'
 
-import { getSession } from '@/core/session/session'
+import { getSession } from '@/server/auth/service/session'
 import { ForbiddenError, NotFoundError, UnauthorizedError } from '@/server/lib/errors'
 import { roleAtLeast, type Role } from '@/shared/model/domain'
 

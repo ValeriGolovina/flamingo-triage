@@ -1,6 +1,6 @@
 import 'server-only'
 
-import { prisma } from '@/core/db/prisma'
+import { prisma } from '@/server/lib/prisma'
 import type { Role } from '@/shared/model/domain'
 
 export const membershipRepository = {

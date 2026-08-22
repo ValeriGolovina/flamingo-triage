@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-import { clearSession, getSession, setSession } from '@/core/session/session'
+import { clearSession, getSession, setSession } from '@/server/auth/service/session'
 import { userRepository } from '@/server/auth/repository/userRepository'
 import { NotFoundError, toErrorResponse } from '@/server/lib/errors'
 import { parseBody } from '@/server/lib/validate'

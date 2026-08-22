@@ -1,10 +1,10 @@
 'use client'
 
-import { useSession } from '@/shared/session/useSession'
-import { UserPicker } from '@/features/auth/ui/UserPicker'
-import { QueueTable } from '@/features/queue/ui/QueueTable'
-import { WorkspaceSwitcher } from '@/features/workspace/ui/WorkspaceSwitcher'
-import { EmptyState } from '@/shared/ui/states'
+import { useSession } from '@/client/shared/session/useSession'
+import { UserPicker } from '@/client/features/auth/ui/UserPicker'
+import { QueueTable } from '@/client/features/queue/ui/QueueTable'
+import { WorkspaceSwitcher } from '@/client/features/workspace/ui/WorkspaceSwitcher'
+import { EmptyState } from '@/client/shared/ui/states'
 
 /**
  * Composition lives at the page level: features never import one another, so

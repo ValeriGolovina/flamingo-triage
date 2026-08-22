@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 
-import { QueryProvider } from '@/core/query/QueryProvider'
+import { QueryProvider } from '@/client/shared/query/QueryProvider'
 
 import './globals.css'
 

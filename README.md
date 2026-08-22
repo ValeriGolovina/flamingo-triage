@@ -127,16 +127,16 @@ curl -H "Authorization: Bearer $CRON_SECRET" localhost:3000/api/cron/stale-claim
 
 | | Where |
 |---|---|
-| **R1** claim once | `src/server/queue/repository/itemRepository.ts` (the conditional UPDATE), `src/server/queue/service/claimService.ts`, `src/features/queue/hooks/useItemActions.ts` |
+| **R1** claim once | `src/server/queue/repository/itemRepository.ts` (the conditional UPDATE), `src/server/queue/service/claimService.ts`, `src/client/features/queue/hooks/useItemActions.ts` |
 | **R2** sealed workspaces | `src/server/workspace/service/workspaceContext.ts`, `src/server/workspace/model/context.ts` |
 | **R3** resolving notifies | `src/server/notifications/`, `src/app/api/cron/notifications/route.ts` |
-| **R4** pagination | `itemRepository.listPage`, `src/features/queue/hooks/useQueue.ts` |
+| **R4** pagination | `itemRepository.listPage`, `src/client/features/queue/hooks/useQueue.ts` |
 | **R5** stale claims | `src/server/queue/service/sweepService.ts`, `src/app/api/cron/stale-claims/route.ts` |
 
-Layout: `src/features/*` is client-only, `src/server/*` is server-only, and the
-only bridge between them is `src/app/api/*`. `src/core/*` holds singletons,
-`src/shared/*` holds what both sides need. `CLAUDE.md` states the rules the code
-follows.
+Layout: three roots, each answering who runs it. `src/client/*` is browser-only,
+`src/server/*` is server-only, and `src/shared/*` is the one thing both touch —
+wire contracts, no behaviour. The only bridge at runtime is `src/app/api/*`.
+`CLAUDE.md` states the rules and the four greps that check them.
 
 ---
 

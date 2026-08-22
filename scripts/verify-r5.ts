@@ -149,14 +149,18 @@ async function main() {
     // --- a member must not resolve an item they never held ---
     // Before the review this branch read `or status = 'open'`, which let anyone
     // resolve any unclaimed item by curl. It is now scoped to last_claimed_by_id.
-    const { items: untouched } = await json<{ items: Item[] }>(
-      await fetch(`${BASE_URL}/api/workspaces/${workspaceId}/items?status=open&limit=1`, {
-        headers: { cookie: bob.cookie },
-      }),
-      'open item',
+    // Chosen by last claimer, not by "first open item in the list". The sweep
+    // deliberately preserves last_claimed_by_id, so plenty of open items are
+    // ones this user may legitimately resolve — picking blindly makes the test
+    // depend on which of them happens to sort first.
+    const virgin = await db.query<{ id: string }>(
+      `select id from items
+        where workspace_id = $1 and status = 'open' and last_claimed_by_id is null
+        limit 1`,
+      [workspaceId],
     )
     const neverHeld = await json<ActionResult>(
-      await fetch(`${BASE_URL}/api/workspaces/${workspaceId}/items/${untouched[0].id}/resolve`, {
+      await fetch(`${BASE_URL}/api/workspaces/${workspaceId}/items/${virgin.rows[0].id}/resolve`, {
         method: 'POST',
         headers: { cookie: bob.cookie },
       }),

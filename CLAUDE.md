@@ -64,11 +64,25 @@ Two version facts that break code written from memory:
 
 ### 3.1 Client and server are split *physically*
 
-- `src/features/*` — **client only**. Never imports Prisma or secrets.
-- `src/server/*` — **server only**. Owns the database. Never imported from
-  `features/*`. Every module starts with `import 'server-only'`, so a leak is a
-  build error rather than a bundle surprise.
-- The only bridge is HTTP: `app/api/*/route.ts`.
+Three roots, and each one answers the same question: **who runs this?**
+
+- `src/client/*` — **browser only**. Never imports Prisma, `src/server/*`, or a secret.
+- `src/server/*` — **server only**. Owns the database. Every module starts with
+  `import 'server-only'`, so a leak is a build error rather than a bundle surprise.
+- `src/shared/*` — the **only** thing both sides touch: wire contracts. It
+  imports from neither side, and it contains no behaviour, only shapes.
+- The only bridge at runtime is HTTP: `app/api/*/route.ts`.
+
+There is no `core/` folder. "Is a singleton" is a real property — the Prisma
+client and the QueryClient are both one-per-app — but it cuts *across* the
+client/server split rather than along it, and grouping by it put the database
+client outside `src/server`. Singletons now live on their own side; the folder
+simply stops advertising the lesser property.
+
+Likewise `shared/` means one thing only. It used to hold the http client, the ui
+kit and the session hook, none of which the server ever imported — that is
+*shared between client features*, which is client code, and it lives in
+`src/client/shared/`.
 
 "Which side does this run on?" is answered by the folder, never guessed.
 
@@ -90,32 +104,34 @@ ui → hook → api → fetch → app/api/*/route.ts → server/<feature>/servic
 
 ```
 src/
-  app/                          # App Router — routing and composition only
-  core/                         # singletons, one instance per app
-    db/prisma.ts  session/  config/env.ts  query/
-  shared/                       # cross-cutting, owns no domain
-    model/    # wire contracts (DTO) used by client AND server
-    api/      # http client, error-envelope reader
-    session/  # who is signed in — read by three features
-    workspace/# which workspace is on screen — read by three features
-    ui/  lib/
-  features/<feature>/           # CLIENT, layered
-    model/  api/  hooks/  store/  ui/     (+ helpers/ inside a layer)
-  server/<feature>/             # SERVER, layered
-    model/  repository/  service/         (+ helpers/)
-  server/lib/                   # shared server infrastructure with no single owner
-```
+  app/                          # Next routing + page composition only
+    api/**/route.ts             # the thin HTTP bridge
 
-Client features: `auth`, `workspace`, `queue`.
-Server features: `auth`, `workspace`, `queue`, `notifications`.
+  server/                       # runs on the server, nowhere else
+    lib/                        # infrastructure with no single owner
+      prisma.ts  env.ts  errors.ts  validate.ts  db.ts  system.ts
+    <feature>/                  # auth · workspace · queue · notifications
+      model/  repository/  service/        (+ helpers/)
+
+  client/                       # runs in the browser, nowhere else
+    features/<feature>/         # auth · workspace · queue
+      model/  api/  hooks/  store/  ui/    (+ helpers/)
+    shared/                     # shared BETWEEN client features
+      api/  ui/  session/  workspace/  query/
+
+  shared/                       # shared BETWEEN client and server
+    model/                      # wire contracts (DTO) and cross-boundary enums
+```
 
 ### 3.4 Dependency direction — down, never up, never sideways
 
 ```
-app  →  features  →  shared  →  core
+app  →  client/features  →  client/shared  →  shared
+app  →  server/<feature> →  server/lib     →  shared
 ```
 
-- `shared` knows nothing about features. `core` knows nothing about anything.
+- `shared` knows nothing about either side; that is what makes it shared.
+- `client/shared` knows nothing about features.
 - **A feature never imports another feature.** Lift shared code into `shared/`.
   This rule is not bureaucracy: `queue` and `workspace` and `auth` all want each
   other, and that is exactly where a layered architecture quietly collapses.
@@ -124,7 +140,17 @@ app  →  features  →  shared  →  core
   `<QueueTable>` with `<WorkspaceSwitcher>`. Gluing features together lives at
   the page level, never inside a feature.
 
-A `grep -rn "from '@/features/" src/features` returning anything is a violation.
+These boundaries are **checked, not hoped for**:
+
+```
+npm run check:arch
+```
+
+It fails on a feature importing another feature, the client reaching into the
+server, the server reaching into the client, shared depending on either side, or
+an empty layer folder. It exists because the first of those was violated and a
+review caught it rather than the build — a rule nothing checks is a rule that
+decays.
 
 ### 3.5 State: React Query and Zustand, hard boundary
 
@@ -330,8 +356,11 @@ message.
   layers.
 - Prefer editing an existing file over creating one. One responsibility per file,
   but do not split a 30-line module into three.
-- Used by two features → `shared/`. Never feature-to-feature.
-- Exactly one instance per app → `core/`.
+- Used by two client features → `client/shared/`. Never feature-to-feature.
+- Needed by both the client and the server → `shared/model/`, and it must be a
+  shape, not behaviour.
+- Exactly one instance per app → wherever its **side** lives, not a `core/`
+  folder: `server/lib/` or `client/shared/`.
 
 ---
 
@@ -351,8 +380,8 @@ and say so in a sentence."*
   wrong answer is invisible until it reaches a person: `roleAtLeast`,
   `applyItemToCache`, `readErrorCode`.
 - No UI snapshot tests. No e2e unless everything else is done.
-- Before calling anything done: `npx tsc --noEmit`, `npm run lint`, `npm test`,
-  and `npm run build` before a deploy.
+- Before calling anything done: `npx tsc --noEmit`, `npm run lint`,
+  `npm run check:arch`, `npm test` — and `npm run build` before a deploy.
 
 ---
 
@@ -394,6 +423,7 @@ npm run build                # production build
 npm run lint
 npx tsc --noEmit
 npm test                     # vitest, no infrastructure needed
+npm run check:arch           # the boundaries in section 3, as a command
 npx prisma migrate dev       # apply migrations locally
 npm run seed                 # ~10k items; refuses a non-empty DB without --reset
 npm run verify:r1            # …and verify:r2 / r3 / r4 / r5

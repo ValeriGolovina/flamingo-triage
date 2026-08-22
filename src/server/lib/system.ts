@@ -1,6 +1,6 @@
 import 'server-only'
 
-import { env } from '@/core/config/env'
+import { env } from '@/server/lib/env'
 
 declare const systemContextBrand: unique symbol
 

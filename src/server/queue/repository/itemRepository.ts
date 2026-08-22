@@ -1,6 +1,6 @@
 import 'server-only'
 
-import { prisma } from '@/core/db/prisma'
+import { prisma } from '@/server/lib/prisma'
 import type { Executor } from '@/server/lib/db'
 import type { SystemContext } from '@/server/lib/system'
 import { Prisma } from '@/generated/prisma/client'

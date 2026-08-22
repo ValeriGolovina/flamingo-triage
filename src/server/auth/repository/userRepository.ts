@@ -1,6 +1,6 @@
 import 'server-only'
 
-import { prisma } from '@/core/db/prisma'
+import { prisma } from '@/server/lib/prisma'
 
 export const userRepository = {
   /** Powers the sign-in dropdown. Public by design — these are seeded demo users. */
