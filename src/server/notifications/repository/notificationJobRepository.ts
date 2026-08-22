@@ -67,13 +67,23 @@ export const notificationJobRepository = {
     `
   },
 
-  /** Keeps the reason. A dead job that says nothing is a silent failure. */
-  async markFailed(jobId: string, attempts: number, error: string): Promise<void> {
-    const isDead = attempts >= MAX_ATTEMPTS
+  /**
+   * A failure with attempts left. Only the reason changes — the job is already
+   * pending and its next attempt time was set when it was claimed.
+   */
+  async recordFailure(jobId: string, error: string): Promise<void> {
     await prisma.$executeRaw`
       update notification_jobs
-         set status = ${isDead ? 'dead' : 'pending'}::job_status,
-             last_error = ${error.slice(0, 500)}
+         set last_error = ${error.slice(0, 500)}
+       where id = ${jobId}::uuid
+    `
+  },
+
+  /** Out of attempts. Keeps the reason — a dead job that says nothing is a silent failure. */
+  async markDead(jobId: string, error: string): Promise<void> {
+    await prisma.$executeRaw`
+      update notification_jobs
+         set status = 'dead', last_error = ${error.slice(0, 500)}
        where id = ${jobId}::uuid
     `
   },

@@ -10,16 +10,20 @@ import { env } from '@/core/config/env'
  * Not real authentication — the brief asks for a dropdown of seeded users and
  * a signed cookie, and that is exactly what this is.
  *
- * The signature is what matters: the cookie carries a user id in the clear, so
- * without an HMAC anyone could become anyone by editing it. Verification is
- * constant-time so the check cannot be probed byte by byte.
+ * Two things still matter. The signature: the cookie carries a user id in the
+ * clear, so without an HMAC anyone could become anyone by editing it, and it is
+ * compared in constant time so it cannot be probed byte by byte. And the issue
+ * time, which is signed alongside the id and checked here: without it a cookie
+ * captured once would authenticate forever, and the browser-side `maxAge` is a
+ * hint the server never sees.
  */
 const COOKIE_NAME = 'triage_session'
+const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
 
 export type Session = { userId: string }
 
-function sign(userId: string): string {
-  return createHmac('sha256', env.SESSION_SECRET).update(userId).digest('base64url')
+function sign(payload: string): string {
+  return createHmac('sha256', env.SESSION_SECRET).update(payload).digest('base64url')
 }
 
 function signaturesMatch(a: string, b: string): boolean {
@@ -34,22 +38,34 @@ export async function getSession(): Promise<Session | null> {
   const raw = (await cookies()).get(COOKIE_NAME)?.value
   if (!raw) return null
 
-  const separator = raw.lastIndexOf('.')
-  if (separator <= 0) return null
+  // `userId.issuedAt.signature` — the id is a UUID and the signature is
+  // base64url, so neither contains a dot; splitting from the right is exact.
+  const signatureAt = raw.lastIndexOf('.')
+  if (signatureAt <= 0) return null
 
-  const userId = raw.slice(0, separator)
-  if (!signaturesMatch(raw.slice(separator + 1), sign(userId))) return null
+  const payload = raw.slice(0, signatureAt)
+  if (!signaturesMatch(raw.slice(signatureAt + 1), sign(payload))) return null
 
-  return { userId }
+  const issuedAtAt = payload.lastIndexOf('.')
+  if (issuedAtAt <= 0) return null
+
+  const issuedAt = Number(payload.slice(issuedAtAt + 1))
+  if (!Number.isFinite(issuedAt)) return null
+  // A signed but expired cookie is not a session. Signed in the future is not
+  // one either — that is a clock problem or a forged payload, not a login.
+  if (Date.now() - issuedAt > MAX_AGE_MS || issuedAt > Date.now()) return null
+
+  return { userId: payload.slice(0, issuedAtAt) }
 }
 
 export async function setSession(userId: string): Promise<void> {
-  ;(await cookies()).set(COOKIE_NAME, `${userId}.${sign(userId)}`, {
+  const payload = `${userId}.${Date.now()}`
+  ;(await cookies()).set(COOKIE_NAME, `${payload}.${sign(payload)}`, {
     httpOnly: true,
     sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production',
     path: '/',
-    maxAge: 60 * 60 * 24 * 30,
+    maxAge: MAX_AGE_MS / 1000,
   })
 }
 

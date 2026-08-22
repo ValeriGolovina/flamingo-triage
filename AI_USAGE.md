@@ -143,6 +143,36 @@ Next docs turned out to contain the sentence that supports our R2 decision:
 proxy "should not be used as a full session management or authorization
 solution."
 
+**A full review pass at the end, against the code rather than the intent.**
+
+Reading back over finished work found things that writing it had not, and two
+were mine to own:
+
+- **The project rules file had been silently destroyed.** `create-next-app`
+  generates its own `CLAUDE.md` — an eleven-byte `@AGENTS.md` pointer — and the
+  scaffold copy overwrote the authored one before the first commit, so the rules
+  existed in no commit and could not be recovered from history. Nothing failed;
+  `rsync` does not warn, and I never re-read the file. It compounded: a later
+  scripted edit to that file used a plain string replace with no assertion, so it
+  matched nothing and did nothing, and reported success. Both fixes are now
+  rules: never copy a scaffold over the project root without excluding it, and
+  assert the anchor matched before writing.
+- **A check that could not fail.** An early quality gate was written as
+  `tsc --noEmit | tail && echo clean`, which reports the exit status of `tail`
+  and so always printed "clean". A second one, in a verification script I wrote
+  during the review itself, was `check(status !== 'claimed' || true, …)`. A green
+  check that cannot go red is worse than no check, and I found the second one by
+  applying the lesson from the first.
+
+The same pass found real defects in the code: any member could resolve any
+unclaimed item by curl because the condition was wider than the documented
+intent; the row count was recomputed for every page but read only from the first;
+the notification health summary — polled by every client — had no index; four
+imports crossed between features against the project's own rule; and the R1
+verification script would have crashed instead of reporting the one failure it
+exists to detect. All are fixed, and R2 gained the runnable proof it had been
+missing while every other requirement had one.
+
 **Standard gates on every change.** `npx tsc --noEmit`, `npm run lint`,
 `npm test` — clean before each commit. One of my own instructions had a bug worth
 noting: an early gate was written as `tsc --noEmit | tail && echo clean`, which

@@ -12,11 +12,17 @@ export async function getQueuePage(ctx: WorkspaceContext, query: QueueQuery): Pr
       ? { createdAt: query.cursorCreatedAt, id: query.cursorId }
       : undefined
 
-  // The count is a second query on purpose. It is cheap at 10k rows and it is
-  // what lets the UI say "50 of 1,284" instead of implying the page is the set.
+  /**
+   * The count runs for the first page only.
+   *
+   * It is what lets the UI say "50 of 1,284" instead of implying the page is
+   * the set, and the client reads it from the first page alone — so computing
+   * it again for every cursor page means scanning every matching index entry
+   * for a number that is immediately discarded, on a path that polls.
+   */
   const [page, total] = await Promise.all([
     itemRepository.listPage(ctx, { status: query.status, cursor, limit: query.limit }),
-    itemRepository.countMatching(ctx, query.status),
+    cursor ? Promise.resolve(0) : itemRepository.countMatching(ctx, query.status),
   ])
 
   const last = page.items.at(-1)
@@ -24,7 +30,6 @@ export async function getQueuePage(ctx: WorkspaceContext, query: QueueQuery): Pr
   return {
     items: page.items,
     total,
-    nextCursor:
-      page.hasMore && last ? { createdAt: last.createdAt, id: last.id } : null,
+    nextCursor: page.hasMore && last ? { createdAt: last.createdAt, id: last.id } : null,
   }
 }

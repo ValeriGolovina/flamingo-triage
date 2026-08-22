@@ -106,6 +106,7 @@ CLAIMERS=16 ROUNDS=10 npm run verify:r1
 
 | Command | Checks |
 |---|---|
+| `npm run verify:r2` | cross-workspace reads and writes, the confused-deputy shape (own workspace id + foreign item id), a viewer trying to act, and cookies that are absent, forged, expired, or issued in the future |
 | `npm run verify:r3` | the resolve never waits on `notify()`, exactly one outbox row per resolve, two simultaneous drains never take the same job, every job reaches a terminal state keeping its last error |
 | `npm run verify:r4` | an 8-page keyset walk under concurrent claiming — no repeats, no omissions; demonstrates `OFFSET` skipping a row; prints `EXPLAIN ANALYZE` for a deep page both ways |
 | `npm run verify:r5` | stale claims return to the queue, the sweep leaves no contradictory row, it is 401 without the secret, and a late resolve is accepted only when nobody else has taken over |

@@ -156,6 +156,15 @@ satisfies half the requirement and silently fails the other half — a rejected
 promise on a serverless function that is already shutting down tells nobody
 anything, and there is no record that the notification was ever owed.
 
+**A note on the resolve that arrives late.** A claim that expired returns its
+item to the queue, and the resolve that follows should still count — the work was
+done. The first implementation allowed it by widening the condition to
+`or status = 'open'`, which a review caught: that let *any* member resolve *any*
+unclaimed item by curl, without ever holding it, quietly undoing the rule that a
+claim is how work is not duplicated. `last_claimed_by_id` now survives the sweep,
+so the late resolve is accepted only from the person who did the work — and
+`release` clears it, because releasing says "not mine".
+
 **Costs.** A table, a cron route and a retry state machine for what looks like a
 fire-and-forget call. Duplicate notifications are possible and accepted. On
 Vercel's Hobby plan, cron granularity is limited, so scheduled retries are slower

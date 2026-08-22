@@ -121,11 +121,15 @@ async function main() {
         (everyLoserWasTold ? '  every loser was told who has it' : '  LOSERS WERE NOT TOLD'),
     )
 
-    // Hand the item back so a re-run has open items to contend for.
-    await fetch(`${BASE_URL}/api/workspaces/${workspaceId}/items/${target.id}/release`, {
-      method: 'POST',
-      headers: { cookie: won[0].session.cookie },
-    })
+    // Hand the item back so a re-run has open items to contend for. Guarded:
+    // the failure this script exists to catch is "nobody won", and dereferencing
+    // the winner there would crash instead of reporting it.
+    if (won[0]) {
+      await fetch(`${BASE_URL}/api/workspaces/${workspaceId}/items/${target.id}/release`, {
+        method: 'POST',
+        headers: { cookie: won[0].session.cookie },
+      })
+    }
   }
 
   console.log()

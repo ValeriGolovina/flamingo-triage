@@ -28,9 +28,15 @@ export async function drainOutbox(limit = 10): Promise<DrainReport> {
         report.sent++
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
-        await notificationJobRepository.markFailed(job.id, job.attempts, message)
-        if (job.attempts >= MAX_ATTEMPTS) report.dead++
-        else report.failed++
+        // `job.attempts` is the post-increment value returned by claimDue, so
+        // reaching MAX_ATTEMPTS means this attempt was the last one.
+        if (job.attempts >= MAX_ATTEMPTS) {
+          await notificationJobRepository.markDead(job.id, message)
+          report.dead++
+        } else {
+          await notificationJobRepository.recordFailure(job.id, message)
+          report.failed++
+        }
         // Logged, not swallowed: an outbox that fails quietly is the failure
         // mode R3 is written against.
         console.warn(`[outbox] job ${job.id} attempt ${job.attempts} failed: ${message}`)
