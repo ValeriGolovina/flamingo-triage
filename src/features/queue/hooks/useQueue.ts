@@ -5,6 +5,7 @@ import { useMemo } from 'react'
 
 import type { ItemStatus } from '@/shared/model/domain'
 import type { QueueCursor } from '@/shared/model/queue'
+import { useCurrentWorkspaceStore } from '@/shared/workspace/store'
 
 import { fetchQueuePage } from '../api/queue'
 import { useQueueFilters } from '../store/queueFilters'
@@ -17,7 +18,7 @@ export const queueKeys = {
 }
 
 export function useQueue() {
-  const workspaceId = useQueueFilters((s) => s.workspaceId)
+  const workspaceId = useCurrentWorkspaceStore((s) => s.workspaceId)
   const status = useQueueFilters((s) => s.status)
 
   const query = useInfiniteQuery({

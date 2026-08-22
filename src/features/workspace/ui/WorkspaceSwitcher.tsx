@@ -1,6 +1,6 @@
 'use client'
 
-import { useCurrentWorkspace } from '../hooks/useCurrentWorkspace'
+import { useCurrentWorkspace } from '@/shared/workspace/useCurrentWorkspace'
 
 export function WorkspaceSwitcher() {
   const { workspaces, current, setWorkspaceId } = useCurrentWorkspace()

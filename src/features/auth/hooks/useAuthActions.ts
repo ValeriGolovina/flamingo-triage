@@ -2,27 +2,15 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
-import { fetchSession, fetchUsers, signIn, signOut } from '../api/auth'
+import { sessionKeys } from '@/shared/session/useSession'
 
-export const sessionKeys = {
-  session: ['session'] as const,
-  users: ['users'] as const,
-}
+import { fetchUsers, signIn, signOut } from '../api/auth'
 
-export function useSession() {
-  const query = useQuery({ queryKey: sessionKeys.session, queryFn: fetchSession })
-
-  return {
-    user: query.data?.user ?? null,
-    workspaces: query.data?.workspaces ?? [],
-    isLoading: query.isLoading,
-    isError: query.isError,
-  }
-}
+const usersKey = ['users'] as const
 
 /** The seeded users behind the picker that stands in for a login screen. */
 export function useUsers() {
-  const query = useQuery({ queryKey: sessionKeys.users, queryFn: fetchUsers, staleTime: Infinity })
+  const query = useQuery({ queryKey: usersKey, queryFn: fetchUsers, staleTime: Infinity })
   return query.data?.users ?? []
 }
 
@@ -40,8 +28,5 @@ export function useSignIn() {
 
 export function useSignOut() {
   const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: signOut,
-    onSuccess: () => queryClient.clear(),
-  })
+  return useMutation({ mutationFn: signOut, onSuccess: () => queryClient.clear() })
 }

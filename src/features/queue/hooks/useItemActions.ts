@@ -1,9 +1,11 @@
 'use client'
 
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useCallback, useState } from 'react'
 
 import { ActionOutcome, RejectionReason } from '@/shared/model/domain'
 import type { ActionResult } from '@/shared/model/queue'
+import { useCurrentWorkspaceStore } from '@/shared/workspace/store'
 
 import { claimItem, releaseItem, resolveItem } from '../api/actions'
 import { useQueueFilters } from '../store/queueFilters'
@@ -41,14 +43,35 @@ function noticeFor(result: ActionResult): string | null {
  * something false. Instead the button shows a pending state that asserts
  * nothing, and the response — which always carries the fresh row — settles it.
  *
- * Release is uncontended (only the holder can release) so it could be
- * optimistic; it is kept symmetrical here because the round trip is ~100ms and
- * two different behaviours on two adjacent buttons is its own kind of lie.
+ * Release and resolve are uncontended (only the holder reaches them) so they
+ * could be optimistic; they are kept symmetrical because the round trip is
+ * short and two different behaviours on two adjacent buttons is its own lie.
  */
-export function useItemActions(workspaceId: string) {
+export function useItemActions() {
   const queryClient = useQueryClient()
+  const workspaceId = useCurrentWorkspaceStore((s) => s.workspaceId)
   const status = useQueueFilters((s) => s.status)
   const setNotice = useQueueFilters((s) => s.setNotice)
+
+  /**
+   * A set, not the mutation's own `variables`: those hold only the most recent
+   * call, so clicking a second row would drop the first row's pending state
+   * while its request was still in flight — showing an idle button for work
+   * that had not finished.
+   */
+  const [pending, setPending] = useState<ReadonlySet<string>>(() => new Set())
+
+  const begin = useCallback((itemId: string) => {
+    setPending((current) => new Set(current).add(itemId))
+  }, [])
+
+  const finish = useCallback((itemId: string) => {
+    setPending((current) => {
+      const next = new Set(current)
+      next.delete(itemId)
+      return next
+    })
+  }, [])
 
   const settle = (result: ActionResult) => {
     queryClient.setQueryData<QueueData>(queueKeys.list(workspaceId, status), (data) =>
@@ -57,37 +80,30 @@ export function useItemActions(workspaceId: string) {
     setNotice(noticeFor(result))
   }
 
+  const options = {
+    onMutate: begin,
+    onSuccess: settle,
+    onError: () => setNotice('Could not reach the server. Nothing changed.'),
+    onSettled: (_data: unknown, _error: unknown, itemId: string) => finish(itemId),
+  }
+
   const claim = useMutation({
-    mutationFn: (itemId: string) => claimItem(workspaceId, itemId),
-    onSuccess: settle,
-    onError: () => setNotice('Could not reach the server. Nothing changed.'),
+    mutationFn: (itemId: string) => claimItem(workspaceId as string, itemId),
+    ...options,
   })
-
   const release = useMutation({
-    mutationFn: (itemId: string) => releaseItem(workspaceId, itemId),
-    onSuccess: settle,
-    onError: () => setNotice('Could not reach the server. Nothing changed.'),
+    mutationFn: (itemId: string) => releaseItem(workspaceId as string, itemId),
+    ...options,
   })
-
-  /**
-   * Resolve is uncontended — only the holder reaches it — so the response is
-   * all that is needed, and it arrives without waiting on notify(). The
-   * notification is already durable by then; delivery happens elsewhere.
-   */
   const resolve = useMutation({
-    mutationFn: (itemId: string) => resolveItem(workspaceId, itemId),
-    onSuccess: settle,
-    onError: () => setNotice('Could not reach the server. Nothing changed.'),
+    mutationFn: (itemId: string) => resolveItem(workspaceId as string, itemId),
+    ...options,
   })
 
   return {
-    claim,
-    release,
-    resolve,
-    pendingItemId:
-      (claim.isPending ? claim.variables : undefined) ??
-      (release.isPending ? release.variables : undefined) ??
-      (resolve.isPending ? resolve.variables : undefined) ??
-      null,
+    claim: claim.mutate,
+    release: release.mutate,
+    resolve: resolve.mutate,
+    isPending: useCallback((itemId: string) => pending.has(itemId), [pending]),
   }
 }

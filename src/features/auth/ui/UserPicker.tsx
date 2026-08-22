@@ -1,6 +1,8 @@
 'use client'
 
-import { useSession, useSignIn, useSignOut, useUsers } from '../hooks/useSession'
+import { useSession } from '@/shared/session/useSession'
+
+import { useSignIn, useSignOut, useUsers } from '../hooks/useAuthActions'
 
 /**
  * Stands in for a login screen. The brief asks for a dropdown of seeded users

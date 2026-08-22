@@ -1,6 +1,6 @@
 'use client'
 
-import { useSession } from '@/features/auth/hooks/useSession'
+import { useSession } from '@/shared/session/useSession'
 import { UserPicker } from '@/features/auth/ui/UserPicker'
 import { QueueTable } from '@/features/queue/ui/QueueTable'
 import { WorkspaceSwitcher } from '@/features/workspace/ui/WorkspaceSwitcher'

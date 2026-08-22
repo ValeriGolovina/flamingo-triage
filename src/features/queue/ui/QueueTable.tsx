@@ -1,8 +1,8 @@
 'use client'
 
-import { useSession } from '@/features/auth/hooks/useSession'
-import { useCurrentWorkspace } from '@/features/workspace/hooks/useCurrentWorkspace'
 import { Role } from '@/shared/model/domain'
+import { useSession } from '@/shared/session/useSession'
+import { useCurrentWorkspace } from '@/shared/workspace/useCurrentWorkspace'
 import { Spinner } from '@/shared/ui/Spinner'
 import { EmptyState, ErrorState, SkeletonRows } from '@/shared/ui/states'
 
@@ -17,7 +17,7 @@ export function QueueTable() {
   const queue = useQueue()
   const { user } = useSession()
   const { current } = useCurrentWorkspace()
-  const actions = useItemActions(current?.id ?? '')
+  const actions = useItemActions()
 
   return (
     <section className="flex min-h-0 flex-1 flex-col">
@@ -56,10 +56,10 @@ export function QueueTable() {
             item={item}
             currentUserId={user?.id ?? ''}
             role={current?.role ?? Role.Viewer}
-            isPending={actions.pendingItemId === item.id}
-            onClaim={(id) => actions.claim.mutate(id)}
-            onRelease={(id) => actions.release.mutate(id)}
-            onResolve={(id) => actions.resolve.mutate(id)}
+            isPending={actions.isPending(item.id)}
+            onClaim={actions.claim}
+            onRelease={actions.release}
+            onResolve={actions.resolve}
           />
         ))}
 
