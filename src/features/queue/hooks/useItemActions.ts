@@ -5,14 +5,20 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ActionOutcome, RejectionReason } from '@/shared/model/domain'
 import type { ActionResult } from '@/shared/model/queue'
 
-import { claimItem, releaseItem } from '../api/actions'
+import { claimItem, releaseItem, resolveItem } from '../api/actions'
 import { useQueueFilters } from '../store/queueFilters'
 import { applyItemToCache, type QueueData } from './helpers/queueCache'
 import { queueKeys } from './useQueue'
 
 /** What the user is told when the world moved before their click landed. */
 function noticeFor(result: ActionResult): string | null {
-  if (result.outcome === ActionOutcome.Applied) return null
+  if (result.outcome === ActionOutcome.Applied) {
+    // R5: the claim had lapsed and the sweep put the item back, but the work was
+    // done — say so rather than letting it look like the ordinary path.
+    return result.resolvedWithoutClaim
+      ? 'Resolved — you were not holding this item, so the claim had already expired.'
+      : null
+  }
 
   switch (result.reason) {
     case RejectionReason.AlreadyClaimed:
@@ -63,12 +69,25 @@ export function useItemActions(workspaceId: string) {
     onError: () => setNotice('Could not reach the server. Nothing changed.'),
   })
 
+  /**
+   * Resolve is uncontended — only the holder reaches it — so the response is
+   * all that is needed, and it arrives without waiting on notify(). The
+   * notification is already durable by then; delivery happens elsewhere.
+   */
+  const resolve = useMutation({
+    mutationFn: (itemId: string) => resolveItem(workspaceId, itemId),
+    onSuccess: settle,
+    onError: () => setNotice('Could not reach the server. Nothing changed.'),
+  })
+
   return {
     claim,
     release,
+    resolve,
     pendingItemId:
       (claim.isPending ? claim.variables : undefined) ??
       (release.isPending ? release.variables : undefined) ??
+      (resolve.isPending ? resolve.variables : undefined) ??
       null,
   }
 }

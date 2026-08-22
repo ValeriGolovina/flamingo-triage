@@ -8,6 +8,7 @@ import { EmptyState, ErrorState, SkeletonRows } from '@/shared/ui/states'
 
 import { useItemActions } from '../hooks/useItemActions'
 import { useQueue } from '../hooks/useQueue'
+import { NotificationHealth } from './NotificationHealth'
 import { QueueNotice } from './QueueNotice'
 import { QueueRow } from './QueueRow'
 import { QueueToolbar } from './QueueToolbar'
@@ -21,6 +22,7 @@ export function QueueTable() {
   return (
     <section className="flex min-h-0 flex-1 flex-col">
       <QueueToolbar total={queue.total} loaded={queue.items.length} />
+      <NotificationHealth workspaceId={current?.id ?? null} />
       <QueueNotice />
 
       <div className="min-h-0 flex-1 overflow-y-auto">
@@ -57,6 +59,7 @@ export function QueueTable() {
             isPending={actions.pendingItemId === item.id}
             onClaim={(id) => actions.claim.mutate(id)}
             onRelease={(id) => actions.release.mutate(id)}
+            onResolve={(id) => actions.resolve.mutate(id)}
           />
         ))}
 

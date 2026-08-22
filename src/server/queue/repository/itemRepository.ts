@@ -1,6 +1,7 @@
 import 'server-only'
 
 import { prisma } from '@/core/db/prisma'
+import type { Executor } from '@/server/lib/db'
 import { Prisma } from '@/generated/prisma/client'
 import type { WorkspaceContext } from '@/server/workspace/model/context'
 import type { ItemStatus } from '@/shared/model/domain'
@@ -155,4 +156,34 @@ export const itemMutations = {
     `
     return rows[0] ? toQueueItem(rows[0]) : null
   },
+}
+
+/**
+ * Resolve accepts an executor so the caller can put it in the same transaction
+ * as the outbox write. The condition is wider than claim's on purpose: a claim
+ * that expired (R5) returns the item to `open`, and refusing the resolve that
+ * arrives afterwards would throw away work that was actually done. Refusing
+ * only happens when somebody *else* now holds it — accepting there would erase
+ * their claim.
+ */
+export async function resolveItemRow(
+  db: Executor,
+  ctx: WorkspaceContext,
+  itemId: string,
+): Promise<QueueItem | null> {
+  const rows = await db.$queryRaw<ItemRow[]>`
+    with resolved as (
+      update items
+         set status = 'resolved', resolved_by_id = ${ctx.userId}::uuid, resolved_at = now()
+       where id = ${itemId}::uuid
+         and workspace_id = ${ctx.workspaceId}::uuid
+         and (
+           (status = 'claimed' and claimed_by_id = ${ctx.userId}::uuid)
+           or status = 'open'
+         )
+      returning *
+    )
+    select ${SELECT_COLUMNS} from resolved i ${JOIN_ACTORS}
+  `
+  return rows[0] ? toQueueItem(rows[0]) : null
 }

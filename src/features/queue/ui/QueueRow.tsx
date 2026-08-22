@@ -14,13 +14,22 @@ type Props = {
   isPending: boolean
   onClaim: (itemId: string) => void
   onRelease: (itemId: string) => void
+  onResolve: (itemId: string) => void
 }
 
 /**
  * Every row answers "who holds this right now" without a click, and the action
  * area never shows a control that silently does nothing.
  */
-export function QueueRow({ item, currentUserId, role, isPending, onClaim, onRelease }: Props) {
+export function QueueRow({
+  item,
+  currentUserId,
+  role,
+  isPending,
+  onClaim,
+  onRelease,
+  onResolve,
+}: Props) {
   const holder = item.status === ItemStatus.Resolved ? item.resolvedBy : item.claimedBy
   const isMine = item.claimedBy?.id === currentUserId
   const canAct = role !== Role.Viewer
@@ -55,7 +64,7 @@ export function QueueRow({ item, currentUserId, role, isPending, onClaim, onRele
         {formatAge(item.createdAt)}
       </p>
 
-      <div className="flex w-28 shrink-0 justify-end">
+      <div className="flex w-40 shrink-0 justify-end gap-1">
         <Action />
       </div>
     </div>
@@ -86,13 +95,22 @@ export function QueueRow({ item, currentUserId, role, isPending, onClaim, onRele
         )
       }
       return (
-        <button
-          type="button"
-          onClick={() => onRelease(item.id)}
-          className="rounded border border-zinc-300 px-2 py-1 text-xs font-medium hover:bg-white"
-        >
-          Release
-        </button>
+        <>
+          <button
+            type="button"
+            onClick={() => onRelease(item.id)}
+            className="rounded border border-zinc-300 px-2 py-1 text-xs font-medium hover:bg-white"
+          >
+            Release
+          </button>
+          <button
+            type="button"
+            onClick={() => onResolve(item.id)}
+            className="rounded bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-emerald-500"
+          >
+            Resolve
+          </button>
+        </>
       )
     }
 

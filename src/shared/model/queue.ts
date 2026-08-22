@@ -45,4 +45,12 @@ export type ActionResult = {
   outcome: ActionOutcome
   item: QueueItem
   reason?: RejectionReason
+  /**
+   * R5: the resolve landed on an item the caller did not hold — the claim had
+   * expired and the sweep returned it to the queue, or it was never claimed.
+   * Those two are indistinguishable once the sweep has cleared the holder, and
+   * both are accepted: the work was done either way. Surfaced so the UI can say
+   * so rather than pretending the normal path happened.
+   */
+  resolvedWithoutClaim?: boolean
 }
