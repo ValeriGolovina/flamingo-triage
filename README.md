@@ -1,0 +1,172 @@
+# Triage
+
+A shared work queue. A member claims an item so nobody duplicates the work, then
+resolves it or releases it back. The interesting part is what happens when
+several people do this at once.
+
+**Live:** _<add the Vercel URL here>_
+
+---
+
+## Run it
+
+Assumes Node 20 and a fresh Supabase project. Nothing here costs money — free
+tiers throughout.
+
+```bash
+nvm use 20          # .nvmrc pins it
+npm install         # postinstall runs `prisma generate`
+cp .env.example .env.local
+```
+
+Fill in `.env.local`. Both database URLs come from the Supabase dashboard under
+**Get connected → ORM → Prisma**:
+
+| Variable | Where from | Why both |
+|---|---|---|
+| `DATABASE_URL` | Transaction pooler, port **6543**, `?pgbouncer=true` | the runtime connection |
+| `DIRECT_URL` | Direct connection, port **5432** | migrations need a real session; the transaction pooler cannot serve them |
+| `SESSION_SECRET` | `openssl rand -base64 32` | signs the session cookie |
+| `CRON_SECRET` | `openssl rand -base64 32` | guards the two cron routes |
+
+Then:
+
+```bash
+npx prisma migrate deploy   # schema, CHECK constraint, partial indexes
+npm run seed                # ~10,000 items, 3 workspaces, 5 users
+npm run dev
+```
+
+`npm run seed` refuses to run against a database that already holds items. Pass
+`--reset` to wipe and reseed:
+
+```bash
+npm run seed -- --reset
+```
+
+### When you create the Supabase project
+
+Two settings on the creation screen matter, and neither is the default:
+
+- **Uncheck "Automatically expose new tables."** Supabase runs a PostgREST API
+  over the `public` schema, reachable from any browser with the publishable
+  anon key. We never use it — Prisma connects from the server — but if the
+  tables are exposed, that API serves them straight past the authorization
+  layer this project is built around.
+- **Check "Enable automatic RLS."** Prisma connects as the owner of the tables it
+  creates, and owners bypass RLS, so this changes nothing for the app. It is a
+  second barrier on the one channel we do not use. It is *not* the
+  authorization model — see `DECISIONS.md`.
+
+---
+
+## Sign in
+
+There is no password and no OAuth: a dropdown picks one of the seeded users and
+sets a signed cookie, which is what the brief asks for.
+
+Sign in as **Anya Kovalenko** — her memberships cover every authorization
+outcome in one account:
+
+| Workspace | Her role | What she can do |
+|---|---|---|
+| Acme Support | member | read, claim, release, resolve |
+| Globex Support | viewer | read only — actions are visible but disabled, with the reason |
+| Initech Ops | not a member | 404 through every route |
+
+---
+
+## Verify R1
+
+The claim race is the thing worth checking, so it ships as something you can run:
+
+```bash
+npm run verify:r1
+```
+
+It signs in as several seeded users, fires **8 simultaneous claims at one open
+item**, and asserts that exactly one wins and that every loser's response names
+the winner. Five rounds by default:
+
+```
+PASS  round 1  1 won / 7 lost  winner: Oleh Tkachenko  (504ms)  every loser was told who has it
+...
+Exactly one winner in all 5 rounds, and every loser learned who has it.
+```
+
+It drives the HTTP API, not the database, because the guarantee has to hold
+through the whole stack. Point it anywhere:
+
+```bash
+BASE_URL=https://your-app.vercel.app npm run verify:r1
+CLAIMERS=16 ROUNDS=10 npm run verify:r1
+```
+
+### The others
+
+| Command | Checks |
+|---|---|
+| `npm run verify:r3` | the resolve never waits on `notify()`, exactly one outbox row per resolve, two simultaneous drains never take the same job, every job reaches a terminal state keeping its last error |
+| `npm run verify:r4` | an 8-page keyset walk under concurrent claiming — no repeats, no omissions; demonstrates `OFFSET` skipping a row; prints `EXPLAIN ANALYZE` for a deep page both ways |
+| `npm run verify:r5` | stale claims return to the queue, the sweep leaves no contradictory row, it is 401 without the secret, and a late resolve is accepted only when nobody else has taken over |
+
+They need the dev server running and a seeded database. `npm test` needs
+neither — it covers the pure logic (16 tests, ~150ms).
+
+### Cron routes by hand
+
+```bash
+curl -H "Authorization: Bearer $CRON_SECRET" localhost:3000/api/cron/notifications
+curl -H "Authorization: Bearer $CRON_SECRET" localhost:3000/api/cron/stale-claims
+```
+
+---
+
+## Where each requirement lives
+
+| | Where |
+|---|---|
+| **R1** claim once | `src/server/queue/repository/itemRepository.ts` (the conditional UPDATE), `src/server/queue/service/claimService.ts`, `src/features/queue/hooks/useItemActions.ts` |
+| **R2** sealed workspaces | `src/server/workspace/service/workspaceContext.ts`, `src/server/workspace/model/context.ts` |
+| **R3** resolving notifies | `src/server/notifications/`, `src/app/api/cron/notifications/route.ts` |
+| **R4** pagination | `itemRepository.listPage`, `src/features/queue/hooks/useQueue.ts` |
+| **R5** stale claims | `src/server/queue/service/sweepService.ts`, `src/app/api/cron/stale-claims/route.ts` |
+
+Layout: `src/features/*` is client-only, `src/server/*` is server-only, and the
+only bridge between them is `src/app/api/*`. `src/core/*` holds singletons,
+`src/shared/*` holds what both sides need. `CLAUDE.md` states the rules the code
+follows.
+
+---
+
+## Deploying
+
+1. Import the repo into Vercel.
+2. Set `DATABASE_URL`, `DIRECT_URL`, `SESSION_SECRET`, `CRON_SECRET`.
+3. **Set the function region to match the database.** The seeded project lives in
+   `eu-west-1` (Dublin), so functions belong in `dub1`. A resolve is a
+   transaction — several round trips — and running it across the Atlantic turns
+   ~20ms into ~800ms.
+4. Run `npx prisma migrate deploy` and `npm run seed` against the production
+   database.
+
+`vercel.json` schedules both cron routes hourly. **On Vercel's Hobby plan cron
+granularity is limited**, so retries are slower there than the code allows — a
+plan constraint, not a design decision. Delivery does not depend on it alone:
+every resolve also drains a batch of whatever else is due, so activity keeps the
+outbox moving between scheduled runs.
+
+---
+
+## How long it took
+
+Roughly **_<fill in>_** in total, and the split is the useful part: most of it
+went into deciding *before* writing, not writing. The authorization model, the
+sort key and the notification guarantee were argued out and written into
+`CLAUDE.md` first, because all three are expensive to reverse once code exists —
+the remaining implementation was comparatively mechanical.
+
+The two things that cost unexpected time were both dependency surprises rather
+than requirements: Next 16 renaming middleware to `proxy.ts`, and Prisma 7
+requiring a driver adapter and dropping `directUrl`. Both needed the local docs
+read before anything would connect.
