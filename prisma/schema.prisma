@@ -1,0 +1,128 @@
+// Triage — schema designed for all five requirements up front.
+// Migrating a 10k-row seeded database mid-flight is what we are avoiding.
+//
+// Tables and columns are snake_case on purpose (@map / @@map): R1 and R4 are
+// hand-written SQL, and unquoted snake_case is far less error-prone than
+// quoted "camelCase" — one missed quote and Postgres lowercases the identifier.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  // No url here — Prisma 7 takes it from prisma.config.ts (migrations) and
+  // from the driver adapter (runtime). See prisma.config.ts.
+}
+
+enum Role {
+  owner
+  member
+  viewer
+
+  @@map("role")
+}
+
+enum ItemStatus {
+  open
+  claimed
+  resolved
+
+  @@map("item_status")
+}
+
+enum JobStatus {
+  pending
+  sent
+  dead
+
+  @@map("job_status")
+}
+
+model User {
+  id   String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name String
+
+  memberships   Membership[]
+  claimedItems  Item[]       @relation("ItemClaimedBy")
+  resolvedItems Item[]       @relation("ItemResolvedBy")
+
+  @@map("users")
+}
+
+model Workspace {
+  id   String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name String
+
+  memberships Membership[]
+  items       Item[]
+
+  @@map("workspaces")
+}
+
+/// One row = this user's role in this workspace. The composite primary key is
+/// the constraint: a user cannot hold two roles in the same workspace.
+model Membership {
+  userId      String @map("user_id") @db.Uuid
+  workspaceId String @map("workspace_id") @db.Uuid
+  role        Role
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@id([userId, workspaceId])
+  @@map("memberships")
+}
+
+model Item {
+  id          String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId String     @map("workspace_id") @db.Uuid
+  title       String
+  status      ItemStatus @default(open)
+
+  // Holder lives on the row itself, not in a separate Claim table: R1's
+  // "exactly one wins" is then a single conditional UPDATE on a single row.
+  // The cost — no claim history — is documented in DECISIONS.md.
+  claimedById  String?   @map("claimed_by_id") @db.Uuid
+  claimedAt    DateTime? @map("claimed_at") @db.Timestamptz(3)
+  resolvedById String?   @map("resolved_by_id") @db.Uuid
+  resolvedAt   DateTime? @map("resolved_at") @db.Timestamptz(3)
+
+  // Immutable — this is the sort key for R4. Claiming an item must never move
+  // it in the ordering, or pages skip and repeat rows.
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  workspace  Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  claimedBy  User?     @relation("ItemClaimedBy", fields: [claimedById], references: [id])
+  resolvedBy User?     @relation("ItemResolvedBy", fields: [resolvedById], references: [id])
+
+  notificationJobs NotificationJob[]
+
+  // Unfiltered queue. Columns match ORDER BY exactly, so the Sort node disappears.
+  @@index([workspaceId, createdAt(sort: Desc), id(sort: Desc)], map: "items_ws_created_id_idx")
+  // Filtered queue. A separate index because a composite index is used left to
+  // right — with `status` second, a query without a status filter can't use it.
+  @@index([workspaceId, status, createdAt(sort: Desc), id(sort: Desc)], map: "items_ws_status_created_id_idx")
+  @@map("items")
+}
+
+/// Transactional outbox (R3): written in the same transaction as the resolve,
+/// so the intent to notify is durable before the response goes out.
+/// Guarantee: at-least-once with a visible record.
+model NotificationJob {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  itemId      String    @map("item_id") @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  status      JobStatus @default(pending)
+
+  attempts      Int       @default(0)
+  lastError     String?   @map("last_error")
+  nextAttemptAt DateTime  @default(now()) @map("next_attempt_at") @db.Timestamptz(3)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  sentAt        DateTime? @map("sent_at") @db.Timestamptz(3)
+
+  item Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@map("notification_jobs")
+}
