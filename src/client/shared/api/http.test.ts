@@ -10,7 +10,7 @@ const response = (body: string, contentType = 'application/json') =>
 /**
  * Errors are read from the body rather than inferred from the status, so this
  * is the function that decides what the user is told when something fails.
- * The `null` case is the trap it exists for: `res.json()` *resolves* on a
+ * The `null` case is the trap it exists for: `res.json()` resolves on a
  * literal `null` body, so a plain `.catch()` never fires and indexing the
  * result throws a TypeError that surfaces as an unrelated failure.
  */

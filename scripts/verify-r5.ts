@@ -89,7 +89,7 @@ async function main() {
      * Backdated well past the window rather than just over it. The sweep takes
      * the oldest claims first and is batched, and a live queue accumulates
      * plenty of stale ones — a claim that is merely 31 minutes old is the
-     * *youngest* stale row and would not be in the first batch.
+     * youngest stale row and would not be in the first batch.
      */
     const makeStale = (id: string) =>
       db.query(`update items set claimed_at = now() - interval '100 days' where id = $1`, [id])

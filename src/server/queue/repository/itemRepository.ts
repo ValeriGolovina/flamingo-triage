@@ -1,9 +1,9 @@
 import 'server-only'
 
-import { prisma } from '@/server/lib/prisma'
-import type { Executor } from '@/server/lib/db'
-import type { SystemContext } from '@/server/lib/system'
 import { Prisma } from '@/generated/prisma/client'
+import type { Executor } from '@/server/lib/db'
+import { prisma } from '@/server/lib/prisma'
+import type { SystemContext } from '@/server/lib/system'
 import type { WorkspaceContext } from '@/server/workspace/model/context'
 import type { ItemStatus } from '@/shared/model/domain'
 import type { QueueCursor, QueueItem } from '@/shared/model/queue'
@@ -209,21 +209,7 @@ export async function resolveItemRow(
 
 export type SweptClaim = { id: string; workspace_id: string }
 
-/**
- * R5. Returns claims older than the window to the queue.
- *
- * Deliberately unscoped by workspace — the scheduler has no user and no
- * workspace — which is why it demands a `SystemContext` instead of just taking
- * no context at all.
- *
- * One conditional UPDATE again, for the same reason as R1: the row must not be
- * read, judged, and then written. Somebody may resolve or release an item in
- * the middle of a sweep, and the WHERE clause is what makes that safe.
- *
- * Clearing the holder columns is not optional — the CHECK constraint rejects an
- * `open` row that still names a holder, which is precisely the bug this kind of
- * bulk update tends to ship with.
- */
+/** How many claims are past the window right now, across every workspace. */
 export async function countStaleClaims(
   _system: SystemContext,
   staleAfterMinutes: number,
@@ -237,6 +223,22 @@ export async function countStaleClaims(
   return rows[0]?.n ?? 0
 }
 
+/**
+ * R5. Returns claims older than the window to the queue.
+ *
+ * Deliberately unscoped by workspace — the scheduler has no user and no
+ * workspace — which is why it demands a SystemContext instead of taking no
+ * context at all.
+ *
+ * One conditional UPDATE again, for the same reason as R1: the row must not be
+ * read, judged, and then written. Somebody may resolve or release an item in
+ * the middle of a sweep, and the WHERE clause is what makes that safe.
+ *
+ * Clearing the holder columns is not optional — the CHECK constraint rejects an
+ * open row that still names a holder, which is precisely the bug this kind of
+ * bulk update tends to ship with. `last_claimed_by_id` is deliberately kept, so
+ * whoever did the work can still resolve it.
+ */
 export async function sweepStaleClaims(
   _system: SystemContext,
   staleAfterMinutes: number,

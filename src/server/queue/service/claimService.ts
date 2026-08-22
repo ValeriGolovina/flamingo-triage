@@ -1,12 +1,11 @@
 import 'server-only'
 
+import { withTransaction } from '@/server/lib/db'
 import { NotFoundError } from '@/server/lib/errors'
+import { notificationJobRepository } from '@/server/notifications/repository/notificationJobRepository'
 import type { WorkspaceContext } from '@/server/workspace/model/context'
 import { ActionOutcome, ItemStatus, RejectionReason } from '@/shared/model/domain'
 import type { ActionResult } from '@/shared/model/queue'
-
-import { withTransaction } from '@/server/lib/db'
-import { notificationJobRepository } from '@/server/notifications/repository/notificationJobRepository'
 
 import { itemMutations, itemRepository, resolveItemRow } from '../repository/itemRepository'
 
@@ -58,10 +57,10 @@ export async function releaseItem(ctx: WorkspaceContext, itemId: string): Promis
 
 /**
  * R3. Resolving must not wait on notify(), nothing may disappear silently, and
- * no process survives the response — so the resolve and the *intent* to notify
- * are committed together, and delivery happens somewhere else entirely.
+ * no process survives the response. So the resolve and the intent to notify are
+ * committed together, and delivery happens somewhere else entirely.
  *
- * The guarantee this builds is **at-least-once with a visible record**. Not
+ * The guarantee this builds is at-least-once with a visible record. Not
  * exactly-once: if notify() succeeds but the process dies before the job is
  * marked sent, the next drain sends it again. That is the honest name for it,
  * and naming it honestly is worth more than pretending otherwise.

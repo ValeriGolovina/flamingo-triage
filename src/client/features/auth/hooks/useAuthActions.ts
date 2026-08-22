@@ -19,9 +19,12 @@ export function useSignIn() {
   return useMutation({
     mutationFn: signIn,
     onSuccess: (session) => {
+      // Switching identity changes what every cached query is allowed to see,
+      // so everything from the previous one goes. Clearing wholesale rather
+      // than naming the queue's cache key keeps this feature from having to
+      // know another feature's keys — and cannot miss one that is added later.
+      queryClient.clear()
       queryClient.setQueryData(sessionKeys.session, session)
-      // Switching identity changes what every other query is allowed to see.
-      queryClient.removeQueries({ queryKey: ['queue'] })
     },
   })
 }

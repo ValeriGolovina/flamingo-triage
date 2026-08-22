@@ -1,7 +1,10 @@
 import 'server-only'
 
-import { prisma } from '@/server/lib/prisma'
+import { Prisma } from '@/generated/prisma/client'
 import type { Executor } from '@/server/lib/db'
+import { prisma } from '@/server/lib/prisma'
+import type { SystemContext } from '@/server/lib/system'
+import type { WorkspaceContext } from '@/server/workspace/model/context'
 
 export type DueJob = {
   id: string
@@ -12,6 +15,28 @@ export type DueJob = {
 
 /** Give up after this many failed deliveries and leave a visible dead record. */
 export const MAX_ATTEMPTS = 5
+
+/** One claiming statement, with or without a workspace filter. */
+function claimDueWhere(scope: Prisma.Sql, limit: number): Promise<DueJob[]> {
+  return prisma.$queryRaw<DueJob[]>`
+    with due as (
+      select id, attempts
+        from notification_jobs
+       where status = 'pending'
+         and next_attempt_at <= now()
+         ${scope}
+       order by next_attempt_at
+       limit ${limit}
+         for update skip locked
+    )
+    update notification_jobs j
+       set attempts = due.attempts + 1,
+           next_attempt_at = now() + (interval '1 minute' * power(2, due.attempts))
+      from due
+     where j.id = due.id
+    returning j.id, j.item_id, j.workspace_id, j.attempts
+  `
+}
 
 export const notificationJobRepository = {
   /**
@@ -34,29 +59,22 @@ export const notificationJobRepository = {
    * run overlapping the fast path) would both pick up the same job and notify
    * twice for no reason.
    *
-   * Attempts and the next backoff are written *before* the delivery is tried.
-   * If the process dies mid-attempt the job comes back later instead of being
-   * stuck as in-flight forever — which is the deliberate choice of at-least-once
-   * over at-most-once.
+   * Attempts and the next backoff are written before the delivery is tried. If
+   * the process dies mid-attempt the job comes back later instead of being
+   * stuck as in-flight forever — the deliberate choice of at-least-once over
+   * at-most-once.
    */
-  async claimDue(limit: number): Promise<DueJob[]> {
-    return prisma.$queryRaw<DueJob[]>`
-      with due as (
-        select id, attempts
-          from notification_jobs
-         where status = 'pending'
-           and next_attempt_at <= now()
-         order by next_attempt_at
-         limit ${limit}
-           for update skip locked
-      )
-      update notification_jobs j
-         set attempts = due.attempts + 1,
-             next_attempt_at = now() + (interval '1 minute' * power(2, due.attempts))
-        from due
-       where j.id = due.id
-      returning j.id, j.item_id, j.workspace_id, j.attempts
-    `
+  claimDue(_system: SystemContext, limit: number): Promise<DueJob[]> {
+    return claimDueWhere(Prisma.empty, limit)
+  },
+
+  /**
+   * The same, limited to one workspace. The fast path after a resolve has a
+   * WorkspaceContext and no system proof, so it drains what its own caller can
+   * account for rather than reaching across every workspace on their request.
+   */
+  claimDueForWorkspace(ctx: WorkspaceContext, limit: number): Promise<DueJob[]> {
+    return claimDueWhere(Prisma.sql`and workspace_id = ${ctx.workspaceId}::uuid`, limit)
   },
 
   async markSent(jobId: string): Promise<void> {

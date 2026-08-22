@@ -18,7 +18,7 @@ const ERROR_CODES = new Set<string>(Object.values(ErrorCode))
  * add a code and get it rendered with no client change.
  *
  * The `catch` is not enough on its own — a literal `null` body makes
- * `res.json()` *resolve*, and indexing null throws a TypeError that would read
+ * `res.json()` resolve, and indexing null throws a TypeError that would read
  * as an ordinary failure somewhere else entirely.
  */
 export async function readErrorCode(response: Response): Promise<ErrorCode> {

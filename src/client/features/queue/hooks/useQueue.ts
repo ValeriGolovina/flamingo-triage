@@ -12,7 +12,6 @@ import { useQueueFilters } from '../store/queueFilters'
 import { QUEUE_SYNC_OPTIONS } from './useQueueSync'
 
 export const queueKeys = {
-  all: ['queue'] as const,
   list: (workspaceId: string | null, status: ItemStatus | null) =>
     ['queue', workspaceId, status] as const,
 }
@@ -43,7 +42,6 @@ export function useQueue() {
     total: query.data?.pages[0]?.total ?? 0,
     isLoading: query.isLoading,
     isError: query.isError,
-    error: query.error,
     hasNextPage: query.hasNextPage,
     isFetchingNextPage: query.isFetchingNextPage,
     fetchNextPage: query.fetchNextPage,

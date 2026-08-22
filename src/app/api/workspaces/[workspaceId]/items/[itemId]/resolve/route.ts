@@ -1,7 +1,7 @@
 import { after } from 'next/server'
 
 import { toErrorResponse } from '@/server/lib/errors'
-import { drainOutbox } from '@/server/notifications/service/outbox'
+import { drainWorkspaceOutbox } from '@/server/notifications/service/outbox'
 import { resolveItem } from '@/server/queue/service/claimService'
 import { requireWorkspaceContext } from '@/server/workspace/service/workspaceContext'
 import { ActionOutcome, Role } from '@/shared/model/domain'
@@ -22,13 +22,13 @@ export async function POST(
        * in five — but it is bounded by the function's max duration and dies
        * with it, so nothing here is the guarantee.
        *
-       * It drains a batch rather than only the job just written: every resolve
-       * therefore also retries whatever else is due, which is what keeps
-       * delivery moving between cron runs.
+       * It drains a batch rather than only the job just written, so every
+       * resolve also retries whatever else this workspace has due — which is
+       * what keeps delivery moving between cron runs.
        */
       after(async () => {
         try {
-          await drainOutbox(10)
+          await drainWorkspaceOutbox(ctx)
         } catch (error) {
           console.error('[outbox] fast-path drain failed', error)
         }

@@ -1,4 +1,4 @@
-import { cronErrorResponse, requireCronRequest } from '@/server/lib/system'
+import { cronRoute } from '@/server/lib/system'
 import { sweepExpiredClaims } from '@/server/queue/service/sweepService'
 
 /**
@@ -8,16 +8,4 @@ import { sweepExpiredClaims } from '@/server/queue/service/sweepService'
  * demonstrated locally:
  *   curl -H "Authorization: Bearer $CRON_SECRET" localhost:3000/api/cron/stale-claims
  */
-export async function GET(request: Request) {
-  try {
-    const system = requireCronRequest(request)
-    const report = await sweepExpiredClaims(system)
-    console.info('[cron] stale claims swept', report)
-    return Response.json(report)
-  } catch (error) {
-    const denied = cronErrorResponse(error)
-    if (denied) return denied
-    console.error('[cron] sweep failed', error)
-    return Response.json({ error: 'unknown' }, { status: 500 })
-  }
-}
+export const GET = cronRoute('stale claims swept', sweepExpiredClaims)

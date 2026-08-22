@@ -7,6 +7,11 @@ import { parseBody } from '@/server/lib/validate'
 import { membershipRepository } from '@/server/workspace/repository/membershipRepository'
 
 /** Who am I, and which workspaces can I see. */
+/** One definition of the session payload, so GET and POST cannot drift apart. */
+async function sessionState(user: { id: string; name: string }) {
+  return { user, workspaces: await membershipRepository.listForUser(user.id) }
+}
+
 export async function GET() {
   try {
     const session = await getSession()
@@ -17,10 +22,7 @@ export async function GET() {
     // instance. Treat it as signed out rather than 500 on the next query.
     if (!user) return Response.json({ user: null, workspaces: [] })
 
-    return Response.json({
-      user,
-      workspaces: await membershipRepository.listForUser(user.id),
-    })
+    return Response.json(await sessionState(user))
   } catch (error) {
     return toErrorResponse(error)
   }
@@ -35,10 +37,7 @@ export async function POST(request: Request) {
     if (!user) throw new NotFoundError()
 
     await setSession(user.id)
-    return Response.json({
-      user,
-      workspaces: await membershipRepository.listForUser(user.id),
-    })
+    return Response.json(await sessionState(user))
   } catch (error) {
     return toErrorResponse(error)
   }

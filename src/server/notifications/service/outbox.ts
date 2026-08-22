@@ -1,23 +1,18 @@
 import 'server-only'
 
+import type { SystemContext } from '@/server/lib/system'
+import type { WorkspaceContext } from '@/server/workspace/model/context'
+
 import {
   MAX_ATTEMPTS,
   notificationJobRepository,
+  type DueJob,
 } from '../repository/notificationJobRepository'
 import { notify } from './notify'
 
 export type DrainReport = { attempted: number; sent: number; failed: number; dead: number }
 
-/**
- * Delivers what the outbox owes.
- *
- * Called from two places, and the difference between them is the whole
- * guarantee: the cron route is what makes delivery eventually happen, and the
- * call right after a resolve is only a fast path. If the fast path dies with
- * the function, nothing is lost — the row is still there and still due.
- */
-export async function drainOutbox(limit = 10): Promise<DrainReport> {
-  const jobs = await notificationJobRepository.claimDue(limit)
+async function deliver(jobs: DueJob[]): Promise<DrainReport> {
   const report: DrainReport = { attempted: jobs.length, sent: 0, failed: 0, dead: 0 }
 
   await Promise.all(
@@ -28,8 +23,8 @@ export async function drainOutbox(limit = 10): Promise<DrainReport> {
         report.sent++
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
-        // `job.attempts` is the post-increment value returned by claimDue, so
-        // reaching MAX_ATTEMPTS means this attempt was the last one.
+        // `job.attempts` is the post-increment value returned when the job was
+        // claimed, so reaching MAX_ATTEMPTS means this attempt was the last one.
         if (job.attempts >= MAX_ATTEMPTS) {
           await notificationJobRepository.markDead(job.id, message)
           report.dead++
@@ -45,4 +40,33 @@ export async function drainOutbox(limit = 10): Promise<DrainReport> {
   )
 
   return report
+}
+
+/**
+ * Everything the outbox owes, across every workspace. This is the guarantee
+ * behind R3 — it is what makes delivery eventually happen whether or not anyone
+ * is using the app — and it is why it demands system proof: the query is
+ * deliberately unscoped.
+ */
+export async function drainOutbox(system: SystemContext, limit = 50): Promise<DrainReport> {
+  return deliver(await notificationJobRepository.claimDue(system, limit))
+}
+
+/**
+ * The fast path, run after a resolve so the user does not wait on a call that
+ * sleeps a second and fails one time in five.
+ *
+ * Scoped to the caller's workspace. It could reach across all of them and
+ * deliver more, but then one member's resolve would be doing unrelated
+ * workspaces' work on their request — and it would be an unscoped query with no
+ * proof behind it, which is the thing SystemContext exists to prevent.
+ *
+ * Nothing depends on this running: it dies with the function, and the row is
+ * still there and still due.
+ */
+export async function drainWorkspaceOutbox(
+  ctx: WorkspaceContext,
+  limit = 10,
+): Promise<DrainReport> {
+  return deliver(await notificationJobRepository.claimDueForWorkspace(ctx, limit))
 }

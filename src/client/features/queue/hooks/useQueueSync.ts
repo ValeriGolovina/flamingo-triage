@@ -12,7 +12,7 @@ import type { QueueCursor, QueuePage } from '@/shared/model/queue'
  * from the response to its own request, which carries the fresh row. This
  * channel only controls how often someone clicks a row that is already stale.
  *
- * Currently polling. Swapping in a Supabase Broadcast *signal* (an empty
+ * Currently polling. Swapping in a Supabase Broadcast signal (an empty
  * message that triggers invalidation, never a payload — data keeps flowing
  * through our API so the R2 guard re-runs on every fetch) happens here and
  * changes no component. Polling stays regardless: it is also the fallback, and
