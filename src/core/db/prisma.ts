@@ -1,3 +1,5 @@
+import 'server-only'
+
 import { PrismaPg } from '@prisma/adapter-pg'
 
 import { env } from '@/core/config/env'
