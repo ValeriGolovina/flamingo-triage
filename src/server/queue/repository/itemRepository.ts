@@ -2,6 +2,7 @@ import 'server-only'
 
 import { prisma } from '@/core/db/prisma'
 import type { Executor } from '@/server/lib/db'
+import type { SystemContext } from '@/server/lib/system'
 import { Prisma } from '@/generated/prisma/client'
 import type { WorkspaceContext } from '@/server/workspace/model/context'
 import type { ItemStatus } from '@/shared/model/domain'
@@ -186,4 +187,44 @@ export async function resolveItemRow(
     select ${SELECT_COLUMNS} from resolved i ${JOIN_ACTORS}
   `
   return rows[0] ? toQueueItem(rows[0]) : null
+}
+
+export type SweptClaim = { id: string; workspace_id: string }
+
+/**
+ * R5. Returns claims older than the window to the queue.
+ *
+ * Deliberately unscoped by workspace — the scheduler has no user and no
+ * workspace — which is why it demands a `SystemContext` instead of just taking
+ * no context at all.
+ *
+ * One conditional UPDATE again, for the same reason as R1: the row must not be
+ * read, judged, and then written. Somebody may resolve or release an item in
+ * the middle of a sweep, and the WHERE clause is what makes that safe.
+ *
+ * Clearing the holder columns is not optional — the CHECK constraint rejects an
+ * `open` row that still names a holder, which is precisely the bug this kind of
+ * bulk update tends to ship with.
+ */
+export async function sweepStaleClaims(
+  _system: SystemContext,
+  staleAfterMinutes: number,
+  limit: number,
+): Promise<SweptClaim[]> {
+  return prisma.$queryRaw<SweptClaim[]>`
+    with stale as (
+      select id
+        from items
+       where status = 'claimed'
+         and claimed_at < now() - (interval '1 minute' * ${staleAfterMinutes})
+       order by claimed_at
+       limit ${limit}
+         for update skip locked
+    )
+    update items i
+       set status = 'open', claimed_by_id = null, claimed_at = null
+      from stale
+     where i.id = stale.id
+    returning i.id, i.workspace_id
+  `
 }

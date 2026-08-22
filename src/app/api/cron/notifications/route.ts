@@ -1,4 +1,4 @@
-import { env } from '@/core/config/env'
+import { cronErrorResponse, requireCronRequest } from '@/server/lib/system'
 import { drainOutbox } from '@/server/notifications/service/outbox'
 
 /**
@@ -7,16 +7,17 @@ import { drainOutbox } from '@/server/notifications/service/outbox'
  * using the app.
  *
  * Vercel sends `Authorization: Bearer $CRON_SECRET` on scheduled invocations.
- * The route is otherwise public, so the secret is the entire authentication —
- * a timing-safe compare is not warranted for a constant-length bearer token
- * compared once per invocation, but rejecting early is.
  */
 export async function GET(request: Request) {
-  if (request.headers.get('authorization') !== `Bearer ${env.CRON_SECRET}`) {
-    return Response.json({ error: 'unauthorized' }, { status: 401 })
+  try {
+    requireCronRequest(request)
+    const report = await drainOutbox(50)
+    console.info('[cron] outbox drained', report)
+    return Response.json(report)
+  } catch (error) {
+    const denied = cronErrorResponse(error)
+    if (denied) return denied
+    console.error('[cron] drain failed', error)
+    return Response.json({ error: 'unknown' }, { status: 500 })
   }
-
-  const report = await drainOutbox(50)
-  console.info('[cron] outbox drained', report)
-  return Response.json(report)
 }
