@@ -2,7 +2,7 @@
 
 import { ItemStatus } from '@/shared/model/domain'
 
-import { useQueueFilters } from '../store/queueFilters'
+import { useQueueView } from '../store/queueView'
 
 const TABS: Array<{ value: ItemStatus | null; label: string }> = [
   { value: null, label: 'All' },
@@ -12,8 +12,8 @@ const TABS: Array<{ value: ItemStatus | null; label: string }> = [
 ]
 
 export function QueueToolbar({ total, loaded }: { total: number; loaded: number }) {
-  const status = useQueueFilters((s) => s.status)
-  const setStatus = useQueueFilters((s) => s.setStatus)
+  const status = useQueueView((s) => s.status)
+  const setStatus = useQueueView((s) => s.setStatus)
 
   return (
     <div className="flex items-center justify-between gap-4 border-b border-zinc-200 px-4 py-2">

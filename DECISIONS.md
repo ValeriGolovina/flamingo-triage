@@ -12,9 +12,9 @@ pasting an item id into curl. Something has to make cross-workspace access
 impossible, and "impossible" has to survive the next twenty routes somebody adds.
 
 **Chosen.** `requireWorkspaceContext(workspaceId, minRole)`
-([workspaceContext.ts:26](src/server/workspace/service/workspaceContext.ts#L26))
+([`requireWorkspaceContext` — workspaceContext.ts:26](src/server/workspace/service/workspaceContext.ts#L26))
 returns a branded `WorkspaceContext`
-([context.ts:19](src/server/workspace/model/context.ts#L19)), and **no repository
+([`WorkspaceContext` — context.ts:19](src/server/workspace/model/context.ts#L19)), and **no repository
 function accepts a bare id** — the only signature is `(ctx, itemId)`, and every
 query filters on `ctx.workspaceId`. The brand cannot be produced by writing an
 object literal, so a query that skips the check does not compile.
@@ -39,20 +39,25 @@ inside their own workspace, where existence is not a secret. And a malformed id
 is 404 rather than a database error surfacing as a 500.
 
 **Strongest alternative rejected: Postgres RLS.** It is the stronger guarantee —
-it protects the data, not merely the application. What ruled it out is that in
-this configuration its most likely outcome is policies that look correct and
-never run. Prisma creates the tables and connects as their owner, and **owners
-bypass RLS by default** unless `FORCE ROW LEVEL SECURITY` is set — so the app
-behaves identically with and without the policies, and there is no symptom until
-somebody tries the attack. Doing it properly means a separate non-owner role,
-grants re-applied after every migration, and `SET LOCAL` inside an explicit
-transaction on every query because the connection pooler runs in transaction
-mode. It also actively fights two other requirements: RLS can only make rows
-invisible, so R1's "0 rows updated" becomes indistinguishable between "somebody
-was first", "wrong workspace" and "you are a viewer" — and the interface has to
-say something different for each — while the extra membership subquery muddies
-the very plans R4 asks us to paste. A guarantee that cannot be pointed at is
-worse than an absent one.
+it protects the data, not merely the application.
+
+What ruled it out is that here, its most likely outcome is policies that look
+correct and never run. Prisma creates the tables and connects as their owner,
+and owners bypass RLS unless `FORCE ROW LEVEL SECURITY` is set. The app behaves
+identically with and without the policies, so there is no symptom until somebody
+tries the attack.
+
+Doing it properly means a separate non-owner role, grants re-applied after every
+migration, and `SET LOCAL` inside an explicit transaction on every query,
+because the connection pooler runs in transaction mode.
+
+It also fights two other requirements. RLS can only make rows invisible, so
+R1's "0 rows updated" stops distinguishing "somebody was first" from "wrong
+workspace" and "you are a viewer" — three cases the interface must word
+differently. And the extra membership subquery muddies the very plans R4 asks us
+to paste.
+
+A guarantee that cannot be pointed at is worse than an absent one.
 
 **Costs.** Raw SQL is the hole types cannot close: R1's conditional update and
 R4's keyset query are hand-written, and `$queryRaw` does not see the brand. That
@@ -74,7 +79,7 @@ win, the other must learn who has it, and the UI must reconcile without a manual
 refresh — under real concurrency, not just when clicks arrive in order.
 
 **Chosen.** One conditional statement
-([itemRepository.ts:129](src/server/queue/repository/itemRepository.ts#L129)):
+([`itemMutations.claim` — itemRepository.ts:130](src/server/queue/repository/itemRepository.ts#L130)):
 
 ```sql
 update items set status = 'claimed', claimed_by_id = $me, claimed_at = now()
@@ -83,18 +88,18 @@ returning *
 ```
 
 Postgres locks the row, the second writer re-evaluates `status = 'open'` against
-the updated value, and gets nothing back. Zero rows is an *answer*, not a
+the updated value, and gets nothing back. Zero rows is an answer, not a
 failure. The service then does one scoped read — on the losing path only — to
-say **why**, because zero rows is ambiguous between "somebody was first",
+say why, because zero rows is ambiguous between "somebody was first",
 "already resolved" and "no such item here". That read cannot reintroduce the
 race: the decision is already durable.
 
-Losing returns **200, not 409**. The request was valid and authorized; the body
+Losing returns 200, not 409. The request was valid and authorized; the body
 carries the outcome and the fresh row. Statuses describe what happened to the
 request; the body describes what happened in the world.
 
-The interface half matters as much. **Claim is deliberately not optimistic**
-([useItemActions.ts:60](src/features/queue/hooks/useItemActions.ts#L60)). It is a
+The interface half matters as much. Claim is deliberately not optimistic
+([`useItemActions` — useItemActions.ts:50](src/client/features/queue/hooks/useItemActions.ts#L50)). It is a
 contended action — its outcome is unknown at click time — so drawing it as
 "yours" before the server answers states something that is not yet true, and
 anybody who closes the tab in that instant walks away believing it. The button
@@ -111,7 +116,7 @@ would also be correct, but it is two statements and a longer lock to buy what on
 statement already guarantees.
 
 **Costs.** The losing path costs a second query. Holder state lives on the item
-row rather than in a `claims` table, so there is **no claim history** — the
+row rather than in a `claims` table, so there is no claim history — the
 current holder is known, but not who held it before or how often it bounced.
 
 **Wrong later.** The first requirement resembling "show me how many times this
@@ -129,7 +134,7 @@ nothing may disappear silently, and on serverless no process survives the
 response.
 
 **Chosen.** The resolve and a `notification_jobs` row are written in **one
-transaction** ([claimService.ts:73](src/server/queue/service/claimService.ts#L73)),
+transaction** ([`resolveItem` — claimService.ts:72](src/server/queue/service/claimService.ts#L72)),
 so the intent to notify becomes durable at the same instant the resolve does, or
 neither happened. The response then goes out. Delivery happens elsewhere, with
 two triggers and only one of them a guarantee: `after()` on the resolve route is
@@ -139,8 +144,8 @@ anyone is using the app.
 
 The guarantee is **at-least-once with a visible record**. Not exactly-once: if
 `notify()` succeeds and the process dies before the row is marked sent, the next
-drain sends it again. Attempts and the next backoff are written *before* the
-attempt ([notificationJobRepository.ts:42](src/server/notifications/repository/notificationJobRepository.ts#L42)),
+drain sends it again. Attempts and the next backoff are written before the
+attempt ([`claimDueWhere` — notificationJobRepository.ts:20](src/server/notifications/repository/notificationJobRepository.ts#L20)),
 so a process that dies mid-delivery leaves a job that retries rather than one
 stuck in flight — at-least-once chosen over at-most-once, deliberately. After
 five failures a job is marked dead and keeps its last error, and
@@ -159,7 +164,7 @@ anything, and there is no record that the notification was ever owed.
 **A note on the resolve that arrives late.** A claim that expired returns its
 item to the queue, and the resolve that follows should still count — the work was
 done. The first implementation allowed it by widening the condition to
-`or status = 'open'`, which a review caught: that let *any* member resolve *any*
+`or status = 'open'`, which a review caught: that let any member resolve any
 unclaimed item by curl, without ever holding it, quietly undoing the rule that a
 claim is how work is not duplicated. `last_claimed_by_id` now survives the sweep,
 so the late resolve is accepted only from the person who did the work — and
@@ -189,7 +194,7 @@ repeat, and the list must not be fetched whole.
 cursor is the sort key of the last row on the page; the next page asks for what
 sorts strictly after it.
 
-The decision underneath is **the sort key is immutable**. Sorting a queue by
+The decision underneath is the sort key is immutable. Sorting a queue by
 status is the obvious choice and the wrong one: claiming an item would move it
 between pages, so the list reshuffles under the reader and keyset breaks exactly
 as `OFFSET` does. Status is a filter instead, with its own index. And `id` in the
@@ -226,14 +231,14 @@ reading. The cost of `OFFSET` grows with depth; keyset's does not.
 
 **Strongest alternative rejected: `LIMIT/OFFSET`.** It is trivial, supports
 jumping to an arbitrary page, and gives a page count. What ruled it out is that
-it counts *positions*, and positions shift the moment the set changes underneath
+it counts positions, and positions shift the moment the set changes underneath
 — `verify:r4` demonstrates a row being skipped entirely after one item leaves the
 filtered set, which is the brief's "pages don't skip or repeat rows" failing in
 one step.
 
 **Costs — the failure mode, stated plainly.** No jump to an arbitrary page and no
 page count; only "next". Going backwards needs a second query with the comparison
-reversed. And keyset guarantees no skips and no repeats — it does **not**
+reversed. And keyset guarantees no skips and no repeats — it does not
 guarantee the set stays the same: under a status filter, rows legitimately leave
 while you read, so a later page can hold fewer rows than expected. That is the
 queue being alive, and the UI shows each row's status rather than hiding it.
@@ -247,24 +252,28 @@ a stable snapshot id per browsing session.
 
 ## Three things deliberately not done
 
-**1. Realtime push.** A Supabase Broadcast *signal* — an empty message that
-triggers invalidation while the data keeps flowing through our API so the
+**1. Realtime push.** A Supabase Broadcast signal — an empty message that
+triggers invalidation while the data keeps flowing through our API, so the
 authorization guard re-runs — would cut the staleness window from ~2s to ~50ms.
+
 It is not built because correctness does not depend on it: a losing claim learns
-the truth from the response to its own request
-([useQueueSync.ts:41](src/features/queue/hooks/useQueueSync.ts#L41) is the single
-place that would change). Polling has to exist anyway as the fallback, because a
-dropped socket without one turns "2 seconds stale" into "frozen forever", which
-is the worse lie. What polling costs is measurable: ~3.5 KB per tick including
-headers, only while a tab is focused, ~4 MB for a full review session. It breaks
-on **billing, not capability** — roughly 50 concurrent readers per workspace is
-~2.2M function invocations a day, which Postgres would not notice and the invoice
-would. Subscribing to `postgres_changes` instead would be the wrong shape at any
-scale: it always ships the row, straight to the browser, past the guard.
+the truth from the response to its own request. One file would change
+([`QUEUE_SYNC_OPTIONS` — useQueueSync.ts:45](src/client/features/queue/hooks/useQueueSync.ts#L45)).
+Polling has to exist anyway as the fallback — a dropped socket without one turns
+"2 seconds stale" into "frozen forever", which is the worse lie.
+
+What polling costs is measurable: ~3.5 KB per tick including headers, only while
+a tab is focused, ~4 MB across a full review session. It breaks on billing
+rather than capability — roughly 50 concurrent readers per workspace is ~2.2M
+function invocations a day, which Postgres would not notice and the invoice
+would.
+
+Subscribing to `postgres_changes` instead would be the wrong shape at any scale:
+it always ships the row, straight to the browser, past the guard.
 
 **2. RLS as a second barrier.** Rejected as the primary mechanism above, and not
 added underneath either — half-configured RLS is worse than none, and doing it
-properly is a day of work plus a permanent maintenance obligation. What *is* on
+properly is a day of work plus a permanent maintenance obligation. What is on
 is Supabase's automatic RLS with no policies, purely so the auto-generated Data
 API cannot serve anything to the anon key. That is a barrier on a channel we do
 not use, not our authorization model, and calling it otherwise would be the exact
@@ -278,7 +287,7 @@ queue is scrolled, not jumped through, so neither has been missed in use.
 
 ## What I would refactor first
 
-`claimService.ts` holds claim, release **and** resolve, and resolve reaches
+`claimService.ts` holds claim, release and resolve, and resolve reaches
 directly into the notifications repository to enqueue a job — one file with two
 responsibilities and a hard dependency between two features. I would split it and
 have the resolve emit a domain event the notifications side subscribes to. It is

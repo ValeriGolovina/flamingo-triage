@@ -4,7 +4,7 @@ A shared work queue. A member claims an item so nobody duplicates the work, then
 resolves it or releases it back. The interesting part is what happens when
 several people do this at once.
 
-**Live:** _<add the Vercel URL here>_
+Live: _<add the Vercel URL here>_
 
 ---
 
@@ -20,12 +20,12 @@ cp .env.example .env.local
 ```
 
 Fill in `.env.local`. Both database URLs come from the Supabase dashboard under
-**Get connected → ORM → Prisma**:
+Get connected → ORM → Prisma:
 
 | Variable | Where from | Why both |
 |---|---|---|
-| `DATABASE_URL` | Transaction pooler, port **6543**, `?pgbouncer=true` | the runtime connection |
-| `DIRECT_URL` | Direct connection, port **5432** | migrations need a real session; the transaction pooler cannot serve them |
+| `DATABASE_URL` | Transaction pooler, port 6543, `?pgbouncer=true` | the runtime connection |
+| `DIRECT_URL` | Direct connection, port 5432 | migrations need a real session; the transaction pooler cannot serve them |
 | `SESSION_SECRET` | `openssl rand -base64 32` | signs the session cookie |
 | `CRON_SECRET` | `openssl rand -base64 32` | guards the two cron routes |
 
@@ -48,14 +48,14 @@ npm run seed -- --reset
 
 Two settings on the creation screen matter, and neither is the default:
 
-- **Uncheck "Automatically expose new tables."** Supabase runs a PostgREST API
+- Uncheck "Automatically expose new tables." Supabase runs a PostgREST API
   over the `public` schema, reachable from any browser with the publishable
   anon key. We never use it — Prisma connects from the server — but if the
   tables are exposed, that API serves them straight past the authorization
   layer this project is built around.
-- **Check "Enable automatic RLS."** Prisma connects as the owner of the tables it
+- Check "Enable automatic RLS." Prisma connects as the owner of the tables it
   creates, and owners bypass RLS, so this changes nothing for the app. It is a
-  second barrier on the one channel we do not use. It is *not* the
+  second barrier on the one channel we do not use. It is not the
   authorization model — see `DECISIONS.md`.
 
 ---
@@ -65,7 +65,7 @@ Two settings on the creation screen matter, and neither is the default:
 There is no password and no OAuth: a dropdown picks one of the seeded users and
 sets a signed cookie, which is what the brief asks for.
 
-Sign in as **Anya Kovalenko** — her memberships cover every authorization
+Sign in as Anya Kovalenko — her memberships cover every authorization
 outcome in one account:
 
 | Workspace | Her role | What she can do |
@@ -136,11 +136,11 @@ curl -H "Authorization: Bearer $CRON_SECRET" localhost:3000/api/cron/stale-claim
 
 | | Where |
 |---|---|
-| **R1** claim once | `src/server/queue/repository/itemRepository.ts` (the conditional UPDATE), `src/server/queue/service/claimService.ts`, `src/client/features/queue/hooks/useItemActions.ts` |
-| **R2** sealed workspaces | `src/server/workspace/service/workspaceContext.ts`, `src/server/workspace/model/context.ts` |
-| **R3** resolving notifies | `src/server/notifications/`, `src/app/api/cron/notifications/route.ts` |
-| **R4** pagination | `itemRepository.listPage`, `src/client/features/queue/hooks/useQueue.ts` |
-| **R5** stale claims | `src/server/queue/service/sweepService.ts`, `src/app/api/cron/stale-claims/route.ts` |
+| R1 claim once | `src/server/queue/repository/itemRepository.ts` (the conditional UPDATE), `src/server/queue/service/claimService.ts`, `src/client/features/queue/hooks/useItemActions.ts` |
+| R2 sealed workspaces | `src/server/workspace/service/workspaceContext.ts`, `src/server/workspace/model/context.ts` |
+| R3 resolving notifies | `src/server/notifications/`, `src/app/api/cron/notifications/route.ts` |
+| R4 pagination | `itemRepository.listPage`, `src/client/features/queue/hooks/useQueue.ts` |
+| R5 stale claims | `src/server/queue/service/sweepService.ts`, `src/app/api/cron/stale-claims/route.ts` |
 
 Layout: three roots, each answering who runs it. `src/client/*` is browser-only,
 `src/server/*` is server-only, and `src/shared/*` is the one thing both touch —
@@ -153,7 +153,7 @@ wire contracts, no behaviour. The only bridge at runtime is `src/app/api/*`.
 
 1. Import the repo into Vercel.
 2. Set `DATABASE_URL`, `DIRECT_URL`, `SESSION_SECRET`, `CRON_SECRET`.
-3. **Set the function region to match the database.** The seeded project lives in
+3. Set the function region to match the database. The seeded project lives in
    `eu-west-1` (Dublin), so functions belong in `dub1`. A resolve is a
    transaction — several round trips — and running it across the Atlantic turns
    ~20ms into ~800ms.
@@ -170,8 +170,8 @@ outbox moving between scheduled runs.
 
 ## How long it took
 
-Roughly **_<fill in>_** in total, and the split is the useful part: most of it
-went into deciding *before* writing, not writing. The authorization model, the
+Roughly _<fill in>_ in total, and the split is the useful part: most of it
+went into deciding before writing, not into writing. The authorization model, the
 sort key and the notification guarantee were argued out and written into
 `CLAUDE.md` first, because all three are expensive to reverse once code exists —
 the remaining implementation was comparatively mechanical.

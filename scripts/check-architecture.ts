@@ -7,7 +7,7 @@
  *
  *   npm run check:arch
  */
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
 
 type Rule = {
@@ -101,6 +101,42 @@ for (const rule of RULES) {
     console.log(`      ${rule.why}`)
     offenders.forEach((o) => console.log(o))
   }
+}
+
+/**
+ * Links into the source from the deliverable documents.
+ *
+ * The brief asks AI_USAGE to "link the lines", and every one of those links
+ * broke silently when the folders moved. The link text carries the symbol it
+ * points at, so this can check the anchor still lands on it rather than merely
+ * that the file exists.
+ */
+const DOCS = ['README.md', 'DECISIONS.md', 'AI_USAGE.md', 'CLAUDE.md']
+const LINK = /\[`?([\w.]+)`?[^\]]*\]\((src\/[^)#]+)(?:#L(\d+))?\)/g
+
+const brokenLinks: string[] = []
+for (const doc of DOCS) {
+  const text = readFileSync(doc, 'utf8')
+  for (const match of text.matchAll(LINK)) {
+    const [whole, symbol, path, lineNumber] = match
+    if (!existsSync(path)) {
+      brokenLinks.push(`${doc}: ${whole} → no such file`)
+      continue
+    }
+    if (!lineNumber) continue
+    const line = readFileSync(path, 'utf8').split('\n')[Number(lineNumber) - 1]
+    if (line === undefined || !line.includes(symbol.split('.').pop() as string)) {
+      brokenLinks.push(`${doc}: ${whole} → line ${lineNumber} does not mention ${symbol}`)
+    }
+  }
+}
+
+if (brokenLinks.length === 0) {
+  console.log('PASS  every documented source link resolves')
+} else {
+  violations += brokenLinks.length
+  console.log('FAIL  documented source links have drifted')
+  brokenLinks.forEach((b) => console.log(`      ${b}`))
 }
 
 const empty = ['src'].flatMap(emptyDirectories)

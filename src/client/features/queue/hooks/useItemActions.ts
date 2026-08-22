@@ -8,7 +8,7 @@ import type { ActionResult } from '@/shared/model/queue'
 import { useCurrentWorkspaceStore } from '@/client/shared/workspace/store'
 
 import { claimItem, releaseItem, resolveItem } from '../api/actions'
-import { useQueueFilters } from '../store/queueFilters'
+import { useQueueView } from '../store/queueView'
 import { applyItemToCache, type QueueData } from './helpers/queueCache'
 import { queueKeys } from './useQueue'
 
@@ -50,8 +50,8 @@ function noticeFor(result: ActionResult): string | null {
 export function useItemActions() {
   const queryClient = useQueryClient()
   const workspaceId = useCurrentWorkspaceStore((s) => s.workspaceId)
-  const status = useQueueFilters((s) => s.status)
-  const setNotice = useQueueFilters((s) => s.setNotice)
+  const status = useQueueView((s) => s.status)
+  const setNotice = useQueueView((s) => s.setNotice)
 
   /**
    * A set, not the mutation's own `variables`: those hold only the most recent

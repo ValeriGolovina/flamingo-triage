@@ -8,7 +8,7 @@ import type { QueueCursor } from '@/shared/model/queue'
 import { useCurrentWorkspaceStore } from '@/client/shared/workspace/store'
 
 import { fetchQueuePage } from '../api/queue'
-import { useQueueFilters } from '../store/queueFilters'
+import { useQueueView } from '../store/queueView'
 import { QUEUE_SYNC_OPTIONS } from './useQueueSync'
 
 export const queueKeys = {
@@ -18,7 +18,7 @@ export const queueKeys = {
 
 export function useQueue() {
   const workspaceId = useCurrentWorkspaceStore((s) => s.workspaceId)
-  const status = useQueueFilters((s) => s.status)
+  const status = useQueueView((s) => s.status)
 
   const query = useInfiniteQuery({
     queryKey: queueKeys.list(workspaceId, status),

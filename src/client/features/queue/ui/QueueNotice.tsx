@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react'
 
-import { useQueueFilters } from '../store/queueFilters'
+import { useQueueView } from '../store/queueView'
 
 /**
  * Says what happened when an action did not do what the click implied — losing
@@ -10,8 +10,8 @@ import { useQueueFilters } from '../store/queueFilters'
  * silently does nothing"; this is the clear result.
  */
 export function QueueNotice() {
-  const notice = useQueueFilters((s) => s.notice)
-  const setNotice = useQueueFilters((s) => s.setNotice)
+  const notice = useQueueView((s) => s.notice)
+  const setNotice = useQueueView((s) => s.setNotice)
 
   useEffect(() => {
     if (!notice) return
