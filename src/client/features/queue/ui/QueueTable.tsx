@@ -2,9 +2,9 @@
 
 import { Role } from '@/shared/model/domain'
 import { useSession } from '@/client/shared/session/useSession'
-import { useCurrentWorkspace } from '@/client/shared/workspace/useCurrentWorkspace'
 import { Spinner } from '@/client/shared/ui/Spinner'
 import { EmptyState, ErrorState, SkeletonRows } from '@/client/shared/ui/states'
+import { useCurrentWorkspace } from '@/client/shared/workspace/useCurrentWorkspace'
 
 import { useItemActions } from '../hooks/useItemActions'
 import { useQueue } from '../hooks/useQueue'
@@ -19,19 +19,17 @@ export function QueueTable() {
   const { current } = useCurrentWorkspace()
   const actions = useItemActions()
 
-  return (
-    <section className="flex min-h-0 flex-1 flex-col">
-      <QueueToolbar total={queue.total} loaded={queue.items.length} />
-      <NotificationHealth workspaceId={current?.id ?? null} />
-      <QueueNotice />
-
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <Body />
-      </div>
-    </section>
-  )
-
-  function Body() {
+  /**
+   * The body is a plain function call, not `<Body />`.
+   *
+   * A component declared inside another component has a new identity on every
+   * render, so React unmounts and remounts the whole subtree instead of
+   * updating it. On a list that polls, that destroyed and rebuilt every row a
+   * few times a second — which is what threw the scroll position back to the
+   * top: the container's scrollHeight briefly drops to zero and the browser
+   * resets scrollTop before the new rows are inserted.
+   */
+  const body = () => {
     if (queue.isLoading) return <SkeletonRows />
 
     if (queue.isError) {
@@ -56,7 +54,7 @@ export function QueueTable() {
             item={item}
             currentUserId={user?.id ?? ''}
             role={current?.role ?? Role.Viewer}
-            isPending={actions.isPending(item.id)}
+            isPending={actions.pendingIds.has(item.id)}
             onClaim={actions.claim}
             onRelease={actions.release}
             onResolve={actions.resolve}
@@ -81,4 +79,14 @@ export function QueueTable() {
       </>
     )
   }
+
+  return (
+    <section className="flex min-h-0 flex-1 flex-col">
+      <QueueToolbar total={queue.total} loaded={queue.items.length} />
+      <NotificationHealth workspaceId={current?.id ?? null} />
+      <QueueNotice />
+
+      <div className="min-h-0 flex-1 overflow-y-auto">{body()}</div>
+    </section>
+  )
 }

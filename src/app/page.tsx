@@ -1,6 +1,7 @@
 'use client'
 
 import { useSession } from '@/client/shared/session/useSession'
+import { useKeepWorkspaceValid } from '@/client/shared/workspace/useCurrentWorkspace'
 import { UserPicker } from '@/client/features/auth/ui/UserPicker'
 import { QueueTable } from '@/client/features/queue/ui/QueueTable'
 import { WorkspaceSwitcher } from '@/client/features/workspace/ui/WorkspaceSwitcher'
@@ -13,6 +14,8 @@ import { EmptyState } from '@/client/shared/ui/states'
  */
 export default function TriagePage() {
   const { user, workspaces, isLoading } = useSession()
+  // Once, at the composition root — not once per component that reads it.
+  useKeepWorkspaceValid()
 
   return (
     <main className="mx-auto flex min-h-0 w-full max-w-5xl flex-1 flex-col">

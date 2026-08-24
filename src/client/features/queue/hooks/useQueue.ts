@@ -27,6 +27,13 @@ export function useQueue() {
     initialPageParam: null as QueueCursor | null,
     getNextPageParam: (lastPage) => lastPage.nextCursor,
     enabled: Boolean(workspaceId),
+    /**
+     * Every poll tick flips isFetching true and then false. Neither is shown
+     * anywhere, but both would re-render the table and, before the rows were
+     * memoised, every row with it. Subscribing only to what this hook returns
+     * cuts two full renders per tick.
+     */
+    notifyOnChangeProps: ['data', 'isLoading', 'isError', 'hasNextPage', 'isFetchingNextPage'],
     ...QUEUE_SYNC_OPTIONS,
   })
 

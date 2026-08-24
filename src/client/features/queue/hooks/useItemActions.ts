@@ -1,7 +1,7 @@
 'use client'
 
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useCallback, useState } from 'react'
+import { useState } from 'react'
 
 import { ActionOutcome, RejectionReason } from '@/shared/model/domain'
 import type { ActionResult } from '@/shared/model/queue'
@@ -61,17 +61,18 @@ export function useItemActions() {
    */
   const [pending, setPending] = useState<ReadonlySet<string>>(() => new Set())
 
-  const begin = useCallback((itemId: string) => {
-    setPending((current) => new Set(current).add(itemId))
-  }, [])
+  // Not wrapped in useCallback: these are only read out of the mutation options
+  // object, which is rebuilt every render anyway, and TanStack reads the latest
+  // handlers at call time rather than capturing them. Stable references here
+  // would buy nothing.
+  const begin = (itemId: string) => setPending((current) => new Set(current).add(itemId))
 
-  const finish = useCallback((itemId: string) => {
+  const finish = (itemId: string) =>
     setPending((current) => {
       const next = new Set(current)
       next.delete(itemId)
       return next
     })
-  }, [])
 
   const settle = (result: ActionResult) => {
     queryClient.setQueryData<QueueData>(queueKeys.list(workspaceId, status), (data) =>
@@ -104,6 +105,11 @@ export function useItemActions() {
     claim: claim.mutate,
     release: release.mutate,
     resolve: resolve.mutate,
-    isPending: useCallback((itemId: string) => pending.has(itemId), [pending]),
+    /**
+     * The set itself, not a predicate. Rows are memoised, so each one needs a
+     * plain boolean it can compare — handing them a function would change
+     * identity every render and defeat the memo for every row at once.
+     */
+    pendingIds: pending,
   }
 }
