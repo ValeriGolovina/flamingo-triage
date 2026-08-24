@@ -115,7 +115,7 @@ They need the dev server running and a seeded database. Two checks need
 neither:
 
 ```bash
-npm test              # pure logic — 16 tests, ~150ms
+npm test              # pure logic + row behaviour — 23 tests
 npm run check:arch    # the client/server boundaries the layout depends on
 ```
 

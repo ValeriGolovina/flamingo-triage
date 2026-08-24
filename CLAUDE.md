@@ -172,8 +172,13 @@ The brief does not want exhaustive coverage — test where it bought something.
 
 - Requirement behaviour is proved by `npm run verify:r1` … `verify:r5`, which
   drive the real API because these guarantees must hold through the whole stack.
-- `npm test` covers the pure logic that needs no infrastructure: `roleAtLeast`,
-  `applyItemToCache`, `readErrorCode`.
+- `npm test` needs no infrastructure and covers two things: the pure logic
+  where a wrong answer is invisible until it reaches a person (`roleAtLeast`,
+  `applyItemToCache`, `readErrorCode`), and the row behaviour the brief grades —
+  who holds an item, what a viewer may do, that a contended action shows a
+  pending state asserting nothing, and that no state leaves a control which
+  silently does nothing. Component tests use a `@vitest-environment jsdom`
+  docblock so only the files that need a DOM pay for one.
 - Before calling anything done: `npx tsc --noEmit`, `npm run lint`,
   `npm run check:arch`, `npm test`, and `npm run build` before a deploy.
 
