@@ -7,7 +7,16 @@ import { useNotificationSummary } from '../hooks/useNotificationSummary'
  * is the part of it a person can actually see.
  */
 export function NotificationHealth({ workspaceId }: { workspaceId: string | null }) {
-  const { pending, dead } = useNotificationSummary(workspaceId)
+  const { pending, dead, isError } = useNotificationSummary(workspaceId)
+
+  if (isError) {
+    return (
+      <div className="border-b border-amber-200 bg-amber-50 px-4 py-1.5 text-xs text-amber-900">
+        Could not check notification delivery — this strip is not saying
+        everything is fine, it is saying it does not know.
+      </div>
+    )
+  }
 
   if (pending === 0 && dead === 0) return null
 
