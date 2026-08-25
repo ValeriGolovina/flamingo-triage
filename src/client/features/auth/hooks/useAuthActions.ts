@@ -3,6 +3,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { sessionKeys } from '@/client/shared/session/useSession'
+import { useCurrentWorkspaceStore } from '@/client/shared/workspace/store'
+import { defaultWorkspaceId } from '@/client/shared/workspace/useCurrentWorkspace'
 
 import { fetchUsers, signIn, signOut } from '../api/auth'
 
@@ -36,11 +38,24 @@ export function useSignIn() {
       queryClient.removeQueries({
         predicate: (query) => query.queryKey[0] !== sessionKeys.session[0],
       })
+
+      // The selected workspace belongs to whoever selected it, so it goes with
+      // the rest of that identity's state — and it is replaced here rather than
+      // repaired by an effect afterwards. Effects run child-first, so by the
+      // time the page could correct the store the queue has already subscribed
+      // and sent one request into a workspace this session cannot see.
+      useCurrentWorkspaceStore.getState().setWorkspaceId(defaultWorkspaceId(session.workspaces))
     },
   })
 }
 
 export function useSignOut() {
   const queryClient = useQueryClient()
-  return useMutation({ mutationFn: signOut, onSuccess: () => queryClient.clear() })
+  return useMutation({
+    mutationFn: signOut,
+    onSuccess: () => {
+      queryClient.clear()
+      useCurrentWorkspaceStore.getState().setWorkspaceId(null)
+    },
+  })
 }

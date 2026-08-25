@@ -71,13 +71,16 @@ Being pushed produced three things it had not volunteered:
 2. A real fix rather than a smaller poll. An infinite query refetches every
    loaded page per tick, sequentially, so request rate grows with how far you
    scroll. The interval now scales with page count, keeping requests-per-second
-   flat. `CLAUDE.md` had originally specified `maxPages` for this; I rejected that
-   when we got there, because this is a "Load more" list rather than a virtualised
-   one — evicting a page would remove rows still visible on screen.
+   flat. `maxPages` is the obvious fix and is wrong here: this is a "Load more"
+   list rather than a virtualised one, so evicting a page would remove rows still
+   visible on screen. It was specified in the draft of `CLAUDE.md` that the
+   scaffold copy silently overwrote — restored in `a8d514a`, which is why the
+   rejection is visible in the code and the commit rather than in that file's
+   history.
 3. A stated breaking point instead of a reassurance: polling fails on
    billing, not capability, at roughly 50 concurrent readers per workspace.
 
-→ [`QUEUE_SYNC_OPTIONS` — useQueueSync.ts:45](src/client/features/queue/hooks/useQueueSync.ts#L45)
+→ [`QUEUE_SYNC_OPTIONS` — useQueueSync.ts:48](src/client/features/queue/hooks/useQueueSync.ts#L48)
 
 ### A third, worth recording
 

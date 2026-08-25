@@ -14,6 +14,8 @@ type Props = {
   currentUserId: string
   role: Role
   isPending: boolean
+  /** Supplied by the table so every row ages against one clock — see `useAgeTick`. */
+  now: number
   onClaim: (itemId: string) => void
   onRelease: (itemId: string) => void
   onResolve: (itemId: string) => void
@@ -107,16 +109,22 @@ function RowAction({
  * Every row answers "who holds this right now" without a click.
  *
  * Memoised because the list polls: without it every row re-renders on each
- * tick even when the server returned exactly the same rows. Every prop is
- * stable across a tick — `item` is React Query's cached reference, the handlers
+ * tick even when the server returned exactly the same rows. Across a poll tick
+ * every prop is stable — `item` is React Query's cached reference, the handlers
  * are TanStack mutate functions, and `isPending` is a plain boolean — so the
  * comparison is cheap and almost always says "nothing to do".
+ *
+ * `now` is the deliberate exception. Everything else here is a fact about the
+ * row, and a row that has not changed has nothing to redraw; the age is a fact
+ * about the clock, and memo would otherwise hold the last one it printed
+ * forever. Passing it in is what keeps the column honest.
  */
 function QueueRowInner({
   item,
   currentUserId,
   role,
   isPending,
+  now,
   onClaim,
   onRelease,
   onResolve,
@@ -155,7 +163,7 @@ function QueueRowInner({
         className="w-10 shrink-0 text-right text-xs tabular-nums text-zinc-400"
         title={item.createdAt}
       >
-        {formatAge(item.createdAt)}
+        {formatAge(item.createdAt, now)}
       </p>
 
       <div className="flex w-40 shrink-0 justify-end gap-1">

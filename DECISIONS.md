@@ -258,7 +258,7 @@ authorization guard re-runs — would cut the staleness window from ~2s to ~50ms
 
 It is not built because correctness does not depend on it: a losing claim learns
 the truth from the response to its own request. One file would change
-([`QUEUE_SYNC_OPTIONS` — useQueueSync.ts:45](src/client/features/queue/hooks/useQueueSync.ts#L45)).
+([`QUEUE_SYNC_OPTIONS` — useQueueSync.ts:48](src/client/features/queue/hooks/useQueueSync.ts#L48)).
 Polling has to exist anyway as the fallback — a dropped socket without one turns
 "2 seconds stale" into "frozen forever", which is the worse lie.
 
@@ -270,6 +270,24 @@ would.
 
 Subscribing to `postgres_changes` instead would be the wrong shape at any scale:
 it always ships the row, straight to the browser, past the guard.
+
+The signal is the safer shape, but calling it free would be overclaiming, and
+the reason is worth stating because it is not obvious. Sending no payload
+protects the data — a listener still has to come through the API to learn
+anything, and gets a 404 there. It does not protect the *channel*. A browser
+subscribes to `workspace:{id}` directly, with the publishable key, and that
+subscription never reaches `requireWorkspaceContext`; nothing would stop
+somebody listening to a workspace they have no part in. What leaks is not rows
+but rhythm — when a queue is busy, when a team starts work, when it stops.
+Small, but R2 says no cross-workspace reads, and a timing channel is a read of
+one bit.
+
+Supabase's answer to that is private channels, gated by RLS on the realtime
+messages table. Which closes the loop: the same RLS this project rejected in
+decision 1 is what the realtime upgrade would need to be genuinely safe. So the
+"one file would change" above is true of the client code and false of the work —
+doing it properly means taking on the mechanism we declined, and that is the
+honest reason it sits here rather than in the built column.
 
 **2. RLS as a second barrier.** Rejected as the primary mechanism above, and not
 added underneath either — half-configured RLS is worse than none, and doing it

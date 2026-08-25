@@ -35,6 +35,7 @@ function renderRow(over: Partial<QueueItem> = {}, props: Partial<Parameters<type
       currentUserId={ME}
       role={Role.Member}
       isPending={false}
+      now={Date.now()}
       {...handlers}
       {...props}
     />,
@@ -90,6 +91,32 @@ describe('QueueRow', () => {
     expect(screen.queryByRole('button')).toBeNull()
     expect(screen.getByText('Working…')).toBeDefined()
     expect(screen.getByText('Open')).toBeDefined()
+  })
+
+  /**
+   * The row is memoised, so nothing about an unchanged item makes it re-render.
+   * Before `now` was a prop, the age it printed first was the age it printed
+   * forever: this test failed with '1m' after twenty simulated minutes.
+   */
+  it('keeps the age moving even when the item itself never changes', () => {
+    const createdAt = new Date(Date.now() - 60_000).toISOString()
+    const props = {
+      item: item({ createdAt }),
+      currentUserId: ME,
+      role: Role.Member,
+      isPending: false,
+      onClaim: vi.fn(),
+      onRelease: vi.fn(),
+      onResolve: vi.fn(),
+    }
+
+    const { rerender } = render(<QueueRow {...props} now={Date.now()} />)
+    expect(screen.getByTitle(createdAt).textContent).toBe('1m')
+
+    // Same item object, twenty minutes later — exactly what a poll tick that
+    // changed nothing hands back.
+    rerender(<QueueRow {...props} now={Date.now() + 20 * 60_000} />)
+    expect(screen.getByTitle(createdAt).textContent).toBe('21m')
   })
 
   it('leaves a resolved item with no action at all', () => {

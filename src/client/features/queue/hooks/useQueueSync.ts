@@ -1,6 +1,7 @@
 'use client'
 
 import type { InfiniteData, Query } from '@tanstack/react-query'
+import { useEffect, useState } from 'react'
 
 import type { QueueCursor, QueuePage } from '@/shared/model/queue'
 
@@ -11,6 +12,8 @@ import type { QueueCursor, QueuePage } from '@/shared/model/queue'
  * Correctness does not depend on any of this. A losing claim learns the truth
  * from the response to its own request, which carries the fresh row. This
  * channel only controls how often someone clicks a row that is already stale.
+ *
+ * It also owns the clock the rows are read against — see `useAgeTick`.
  *
  * Currently polling. Swapping in a Supabase Broadcast signal (an empty
  * message that triggers invalidation, never a payload — data keeps flowing
@@ -51,3 +54,34 @@ export const QUEUE_SYNC_OPTIONS = {
   refetchIntervalInBackground: false,
   refetchOnWindowFocus: true,
 } as const
+
+/**
+ * The clock the age column is rendered against.
+ *
+ * Rows are memoised, so a row whose data has not changed does not re-render —
+ * which is the point, but it also froze the age it had printed. A row created a
+ * minute ago went on saying "1m" indefinitely, and in an app whose R5 rule is
+ * stated in minutes that is the interface quietly lying about time.
+ *
+ * So the clock is a prop rather than a `Date.now()` read inside the row: it
+ * changes on a cadence of its own, memo sees it change, and the ages move. One
+ * interval for the whole table, not one per row.
+ *
+ * It lives here because this file is the single place allowed to set an
+ * interval, and because both cadences answer the same question — how stale is
+ * the screen allowed to be. Thirty seconds is below the resolution the column
+ * can show: `formatAge` rounds to whole minutes, so nothing is ever more than
+ * one unit behind.
+ */
+const AGE_TICK_MS = 30_000
+
+export function useAgeTick(): number {
+  const [now, setNow] = useState(() => Date.now())
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), AGE_TICK_MS)
+    return () => clearInterval(timer)
+  }, [])
+
+  return now
+}

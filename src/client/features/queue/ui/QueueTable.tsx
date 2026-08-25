@@ -8,6 +8,7 @@ import { useCurrentWorkspace } from '@/client/shared/workspace/useCurrentWorkspa
 
 import { useItemActions } from '../hooks/useItemActions'
 import { useQueue } from '../hooks/useQueue'
+import { useAgeTick } from '../hooks/useQueueSync'
 import { NotificationHealth } from './NotificationHealth'
 import { QueueNotice } from './QueueNotice'
 import { QueueRow } from './QueueRow'
@@ -18,6 +19,9 @@ export function QueueTable() {
   const { user } = useSession()
   const { current } = useCurrentWorkspace()
   const actions = useItemActions()
+  // One clock for the whole table: rows are memoised, so without a prop that
+  // moves, the age column would keep printing whatever it printed first.
+  const now = useAgeTick()
 
   /**
    * The body is a plain function call, not `<Body />`.
@@ -55,6 +59,7 @@ export function QueueTable() {
             currentUserId={user?.id ?? ''}
             role={current?.role ?? Role.Viewer}
             isPending={actions.pendingIds.has(item.id)}
+            now={now}
             onClaim={actions.claim}
             onRelease={actions.release}
             onResolve={actions.resolve}

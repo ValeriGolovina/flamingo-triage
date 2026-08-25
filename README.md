@@ -14,7 +14,7 @@ Assumes Node 20 and a fresh Supabase project. Nothing here costs money — free
 tiers throughout.
 
 ```bash
-nvm use 20          # .nvmrc pins it
+nvm use 20          # .nvmrc pins it; anything below 20.19 fails in the test runner
 npm install         # postinstall runs `prisma generate`
 cp .env.example .env.local
 ```
@@ -115,7 +115,7 @@ They need the dev server running and a seeded database. Two checks need
 neither:
 
 ```bash
-npm test              # pure logic + row behaviour — 23 tests
+npm test              # pure logic + row behaviour — 24 tests
 npm run check:arch    # the client/server boundaries the layout depends on
 ```
 
