@@ -232,6 +232,7 @@ npm run verify:r1 … r5    # need the dev server and a seeded database
 ## 12. Working agreement
 
 Never auto-commit or push. Commits are incremental and imperative, required
-requirements before optional ones. `DECISIONS.md` is written in the same commit
-as the decision, not reconstructed at the end. Where the spec is
-underdetermined, close the gap, record the assumption, move on.
+requirements before optional ones. A decision is settled here before the code
+that depends on it, and written up in `DECISIONS.md` once the requirement it
+shaped exists — argued in advance, not reconstructed from the diff afterwards.
+Where the spec is underdetermined, close the gap, record the assumption, move on.
