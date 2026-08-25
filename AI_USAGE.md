@@ -55,40 +55,33 @@ honest only where the outcome is predetermined. Re-reading the brief afterwards,
 it draws the same line — it asks for "a clear result" about claiming and asks
 whether resolving "feels immediate".
 
-### 2. It said polling was fine. I asked what it costs, twice.
+### 2. Its fix for the polling cost was `maxPages`. It deletes rows off the screen.
 
-The assistant recommended polling every 2 seconds and moved on. I pushed twice:
-first on how much data that shifts, then on the principle — we are building
-something that should scale, and re-sending 50 identical rows every 2 seconds to
-learn that nothing changed is not that.
+The assistant recommended polling every 2 seconds and moved on. I pushed twice on
+what that costs — first on the data it shifts, then on the principle, since
+re-sending 50 identical rows every 2 seconds to learn that nothing changed is not
+something that scales. That surfaced the real problem: an infinite query refetches
+every loaded page per tick, so request rate grows with how far someone has
+scrolled. Its answer, already written into the draft of `CLAUDE.md`, was
+`maxPages`.
 
-Being pushed produced three things it had not volunteered:
+I rejected it. `maxPages` caps the cache by evicting the oldest page, and this is
+a "Load more" list rather than a virtualised one — every loaded row is physically
+on screen. Evicting a page makes rows vanish under the reader's cursor. It fixes
+the traffic by breaking the one axis the brief actually grades.
 
-1. Actual numbers: ~3.5 KB per tick including headers, ~4 MB across a full
-   review session — and the correction that its own earlier suggestion (polling a
-   tiny `max(updated_at)` endpoint instead) saves far less than implied, because
-   at that payload size HTTP headers dominate, not the body.
-2. A real fix rather than a smaller poll. An infinite query refetches every
-   loaded page per tick, sequentially, so request rate grows with how far you
-   scroll. The interval now scales with page count, keeping requests-per-second
-   flat. `maxPages` is the obvious fix and is wrong here: this is a "Load more"
-   list rather than a virtualised one, so evicting a page would remove rows still
-   visible on screen. It was specified in the draft of `CLAUDE.md` that the
-   scaffold copy silently overwrote — restored in `a8d514a`, which is why the
-   rejection is visible in the code and the commit rather than in that file's
-   history.
-3. A stated breaking point instead of a reassurance: polling fails on
-   billing, not capability, at roughly 50 concurrent readers per workspace.
+What we did instead: the interval scales with loaded page count, which holds
+requests-per-second flat without touching what is displayed — measured at 0.50/s
+from one page to twenty.
+
+Being pushed also produced two things it had not volunteered: real numbers
+(~3.5 KB per tick, and the correction that at that payload size HTTP headers
+dominate, so its earlier idea of polling a tiny `max(updated_at)` endpoint saves
+far less than implied), and a stated breaking point instead of a reassurance —
+polling fails on billing, not capability, at roughly 50 concurrent readers per
+workspace.
 
 → [`QUEUE_SYNC_OPTIONS` — useQueueSync.ts:48](src/client/features/queue/hooks/useQueueSync.ts#L48)
-
-### A third, worth recording
-
-I questioned whether Supabase was in the brief at all. It is — three times — but
-only ever as *"Prisma against Supabase Postgres"*. Forcing that re-read produced
-the distinction the whole realtime decision turns on: **Supabase is our database,
-not our backend.** Which is why Supabase Realtime would bypass the authorization
-layer, and why the Data API had to be switched off at project creation.
 
 ---
 
