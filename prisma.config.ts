@@ -10,7 +10,7 @@ export default defineConfig({
   migrations: { path: 'prisma/migrations' },
   datasource: {
     // Migrations need a real session, which the transaction pooler cannot give.
-    // Runtime uses the pooled URL instead — see src/core/db/prisma.ts.
+    // Runtime uses the pooled URL instead — see src/server/lib/prisma.ts.
     url: process.env.DIRECT_URL,
   },
 })
