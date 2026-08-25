@@ -10,8 +10,24 @@ Live: **https://flamingo-triage-ten.vercel.app**
 
 ## Run it
 
-Assumes Node 20 and a fresh Supabase project. Nothing here costs money — free
-tiers throughout.
+Assumes Node 20. Nothing here costs money — free tiers throughout.
+
+### 1. Create the Supabase project
+
+Two settings on the creation screen matter, and neither is the default — both
+have to be chosen now, not afterwards:
+
+- Uncheck "Automatically expose new tables." Supabase runs a PostgREST API
+  over the `public` schema, reachable from any browser with the publishable
+  anon key. We never use it — Prisma connects from the server — but if the
+  tables are exposed, that API serves them straight past the authorization
+  layer this project is built around.
+- Check "Enable automatic RLS." Prisma connects as the owner of the tables it
+  creates, and owners bypass RLS, so this changes nothing for the app. It is a
+  second barrier on the one channel we do not use. It is not the
+  authorization model — see `DECISIONS.md`.
+
+### 2. Install and configure
 
 ```bash
 nvm use 20          # .nvmrc pins it; anything below 20.19 fails in the test runner
@@ -29,7 +45,7 @@ Get connected → ORM → Prisma:
 | `SESSION_SECRET` | `openssl rand -base64 32` | signs the session cookie |
 | `CRON_SECRET` | `openssl rand -base64 32` | guards the two cron routes |
 
-Then:
+### 3. Migrate, seed, run
 
 ```bash
 npx prisma migrate deploy   # schema, CHECK constraint, partial indexes
@@ -43,20 +59,6 @@ npm run dev
 ```bash
 npm run seed -- --reset
 ```
-
-### When you create the Supabase project
-
-Two settings on the creation screen matter, and neither is the default:
-
-- Uncheck "Automatically expose new tables." Supabase runs a PostgREST API
-  over the `public` schema, reachable from any browser with the publishable
-  anon key. We never use it — Prisma connects from the server — but if the
-  tables are exposed, that API serves them straight past the authorization
-  layer this project is built around.
-- Check "Enable automatic RLS." Prisma connects as the owner of the tables it
-  creates, and owners bypass RLS, so this changes nothing for the app. It is a
-  second barrier on the one channel we do not use. It is not the
-  authorization model — see `DECISIONS.md`.
 
 ---
 
