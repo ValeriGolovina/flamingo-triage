@@ -283,11 +283,13 @@ Small, but R2 says no cross-workspace reads, and a timing channel is a read of
 one bit.
 
 Supabase's answer to that is private channels, gated by RLS on the realtime
-messages table. Which closes the loop: the same RLS this project rejected in
-decision 1 is what the realtime upgrade would need to be genuinely safe. So the
-"one file would change" above is true of the client code and false of the work —
-doing it properly means taking on the mechanism we declined, and that is the
-honest reason it sits here rather than in the built column.
+messages table — evaluated against a Supabase-issued JWT this project
+deliberately has no way to mint. Which closes the loop: the same RLS this
+project rejected in decision 1 is what the realtime upgrade would need to be
+genuinely safe. So the "one file would change" above is true of the client code
+and false of the work — doing it properly means taking on the mechanism we
+declined, and that is the honest reason it sits here rather than in the built
+column.
 
 **2. RLS as a second barrier.** Rejected as the primary mechanism above, and not
 added underneath either — half-configured RLS is worse than none, and doing it

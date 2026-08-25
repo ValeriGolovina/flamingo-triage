@@ -170,13 +170,4 @@ outbox moving between scheduled runs.
 
 ## How long it took
 
-Roughly _<fill in>_ in total, and the split is the useful part: most of it
-went into deciding before writing, not into writing. The authorization model, the
-sort key and the notification guarantee were argued out and written into
-`CLAUDE.md` first, because all three are expensive to reverse once code exists —
-the remaining implementation was comparatively mechanical.
-
-The two things that cost unexpected time were both dependency surprises rather
-than requirements: Next 16 renaming middleware to `proxy.ts`, and Prisma 7
-requiring a driver adapter and dropping `directUrl`. Both needed the local docs
-read before anything would connect.
+About 10 hours.
