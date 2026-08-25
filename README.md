@@ -155,10 +155,10 @@ wire contracts, no behaviour. The only bridge at runtime is `src/app/api/*`.
 
 1. Import the repo into Vercel.
 2. Set `DATABASE_URL`, `DIRECT_URL`, `SESSION_SECRET`, `CRON_SECRET`.
-3. Set the function region to match the database. The seeded project lives in
-   `eu-west-1` (Dublin), so functions belong in `dub1`. A resolve is a
+3. `vercel.json` pins functions to `dub1` (Dublin) to match the database in
+   `eu-west-1`. Change it if your Supabase project is elsewhere. A resolve is a
    transaction — several round trips — and running it across the Atlantic turns
-   ~20ms into ~800ms.
+   ~20ms into ~800ms. Vercel's default is `iad1`, which is the wrong side.
 4. Run `npx prisma migrate deploy` and `npm run seed` against the production
    database.
 
