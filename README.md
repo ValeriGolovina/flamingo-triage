@@ -4,7 +4,7 @@ A shared work queue. A member claims an item so nobody duplicates the work, then
 resolves it or releases it back. The interesting part is what happens when
 several people do this at once.
 
-Live: _<add the Vercel URL here>_
+Live: **https://flamingo-triage-ten.vercel.app**
 
 ---
 
