@@ -161,6 +161,13 @@ satisfies half the requirement and silently fails the other half — a rejected
 promise on a serverless function that is already shutting down tells nobody
 anything, and there is no record that the notification was ever owed.
 
+A hosted queue — SQS, QStash, Inngest — is the stronger alternative, and cost
+ruled it out rather than design: nothing here is allowed to cost money. Worth
+saying what it would and would not replace. Retries, backoff and a dead-letter
+queue arrive for free; the outbox row does not go away, because writing to the
+database and pushing to the queue is the same dual write this pattern exists to
+remove. It replaces the cron, not the table.
+
 **A note on the resolve that arrives late.** A claim that expired returns its
 item to the queue, and the resolve that follows should still count — the work was
 done. The first implementation allowed it by widening the condition to
