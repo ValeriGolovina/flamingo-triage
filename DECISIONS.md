@@ -256,6 +256,14 @@ a stable snapshot id per browsing session.
 triggers invalidation while the data keeps flowing through our API, so the
 authorization guard re-runs — would cut the staleness window from ~2s to ~50ms.
 
+That ~2s is the one-page case, and it is the honest weak point of the polling
+design rather than a footnote. The interval scales with loaded pages to hold
+requests-per-second flat, but an infinite query refetches every page together —
+so a reader who has paged deeper waits proportionally longer, and the top of the
+list, where all the contention is, slows down with the rest. Ten pages loaded
+means a 20-second window on row one. Flat request rate is bought with freshness
+exactly where the reader is looking, and a signal is what would buy it back.
+
 It is not built because correctness does not depend on it: a losing claim learns
 the truth from the response to its own request. One file would change
 ([`QUEUE_SYNC_OPTIONS` — useQueueSync.ts:48](src/client/features/queue/hooks/useQueueSync.ts#L48)).
